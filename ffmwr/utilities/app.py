@@ -114,25 +114,26 @@ def user_week_input_validation(settings: AppSettings, week: int, retrieved_curre
 def get_current_nfl_week(settings: AppSettings, offline: bool) -> int:
     api_url = "https://api.sleeper.app/v1/state/nfl"
 
-    current_nfl_week = settings.current_nfl_week
-
-    if not offline:
-        logger.debug("Retrieving current NFL week from the Sleeper API.")
-
-        try:
-            nfl_weekly_info = requests.get(api_url).json()
-            current_nfl_week = nfl_weekly_info.get("leg")
-        except (KeyError, ValueError) as e:
-            logger.warning('Unable to retrieve current NFL week. Defaulting to value set in ".env" file.')
-            logger.debug(e)
-
-    else:
-        logger.debug(
-            "The Fantasy Football Metrics Weekly Report app is being run in offline mode. "
-            'The current NFL week will default to the value set in ".env" file.'
+    if offline:
+        raise RuntimeError(
+            "Offline mode is not supported for current NFL week detection. "
+            "The app must reach the live Sleeper API to determine the week."
         )
 
-    return current_nfl_week
+    logger.debug("Retrieving current NFL week from the Sleeper API.")
+
+    try:
+        nfl_weekly_info = requests.get(api_url, timeout=15).json()
+        current_nfl_week = nfl_weekly_info.get("leg")
+        if current_nfl_week is None:
+            raise ValueError("Sleeper API response did not include the 'leg' field.")
+        return int(current_nfl_week)
+    except (KeyError, ValueError, requests.RequestException) as e:
+        logger.error("Unable to retrieve current NFL week from the Sleeper API.")
+        raise RuntimeError(
+            "Current NFL week could not be determined from Sleeper. "
+            "Ensure the Railway app can reach the public Sleeper API."
+        ) from e
 
 
 def platform_data_factory(

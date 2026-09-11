@@ -326,6 +326,7 @@ class IntegrationSettings(CustomSettings):
         ),
     )
     discord_webhook_id: Optional[str] = Field(None, title=__qualname__)
+    discord_role_id: Optional[str] = Field(None, title=__qualname__)
     discord_channel_notify_bool: bool = Field(False, title=__qualname__)
 
 
@@ -377,7 +378,10 @@ class AppSettings(CustomSettings):
             "example Yahoo public league archive for reference: https://archive.fantasysports.yahoo.com/nfl/2014/729259"
         ),
     )
-    season: Optional[int] = Field(None, title=__qualname__)
+    season: Optional[int] = Field(
+        default_factory=lambda: datetime.today().year,
+        title=__qualname__,
+    )
     nfl_season_length: int = Field(18, title=__qualname__)
     current_nfl_week: Optional[int] = Field(None, title=__qualname__)
     week_for_report: Optional[int | str] = Field(
@@ -430,7 +434,8 @@ def get_app_settings_from_env_file(env_file_path: Path) -> AppSettings:
     if env_file_path.is_file():
         if os.access(env_file_path, mode=os.R_OK):
             env_vars_from_file = set(dotenv_values(env_file_path).keys())
-            missing_env_vars = set([field[0] for field in env_fields]).difference(env_vars_from_file)
+            required_env_keys = {field[0] for field in env_fields if field[0] != "SEASON"}
+            missing_env_vars = required_env_keys.difference(env_vars_from_file)
 
             if missing_env_vars:
                 logger.error(

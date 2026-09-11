@@ -66,8 +66,10 @@ class FantasyFootballReport(object):
             self.game_id = self.settings.platform_settings.yahoo_game_id
         if season:
             self.season: int = int(season)
+        elif self.settings.season:
+            self.season: int = int(self.settings.season)
         else:
-            self.season: int = self.settings.season
+            self.season: int = datetime.today().year
 
         self.playoff_prob_sims = playoff_prob_sims
         self.break_ties = break_ties

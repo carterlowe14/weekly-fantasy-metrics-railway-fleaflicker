@@ -18,6 +18,15 @@ class DiscordIntegration(BaseIntegration):
         self.base_url = "https://discord.com/api/webhooks"
         super().__init__(settings, root_directory, "discord", week)
 
+    def _get_mention_prefix(self) -> str:
+        role_id = self.settings.integration_settings.discord_role_id
+
+        if role_id:
+            return f"<@&{role_id}>"
+        if self.settings.integration_settings.discord_channel_notify_bool:
+            return "@everyone"
+        return ""
+
     def _authenticate(self) -> None:
         if not self.settings.integration_settings.discord_webhook_id:
             self.settings.integration_settings.discord_webhook_id = input(
@@ -32,8 +41,9 @@ class DiscordIntegration(BaseIntegration):
     def post_message(self, message: str) -> Dict:
         logger.debug(f"Posting message to Discord: \n{message}")
 
-        if self.settings.integration_settings.discord_channel_notify_bool:
-            message = f"@everyone\n\n{message}"
+        mention = self._get_mention_prefix()
+        if mention:
+            message = f"{mention}\n\n{message}"
 
         self.client.set_content(message)
 
@@ -44,8 +54,9 @@ class DiscordIntegration(BaseIntegration):
 
         message = self._upload_success_message(file_path.name)
 
-        if self.settings.integration_settings.discord_channel_notify_bool:
-            message = f"@everyone\n{message}"
+        mention = self._get_mention_prefix()
+        if mention:
+            message = f"{mention}\n{message}"
 
         # discord_embed = DiscordEmbed()
         # discord_embed.set_title(file_path.name)
