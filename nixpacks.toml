@@ -1,0 +1,8 @@
+[phases.setup]
+cmds = [
+  "npm install",
+  "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "npm start"
