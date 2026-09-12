@@ -7,7 +7,7 @@ This is the compact deployment bundle for the weekly fantasy football report app
 - reads your Fleaflicker league
 - generates the weekly PDF report
 - posts it to Discord automatically
-- runs unattended on Railway
+- runs as a long-lived trigger service when deployed to Railway
 
 ## Required Railway environment variables
 
@@ -32,8 +32,12 @@ Notes:
 ## Railway deploy command
 
 ```bash
-python main.py --use-default
+python main.py --serve
 ```
+
+This keeps the service running and allows CarlBot or another trigger to call:
+- `GET /health`
+- `POST /trigger`
 
 ## Example local shell setup
 
@@ -48,9 +52,9 @@ export DISCORD_POST_OR_FILE=file
 export CHECK_FOR_UPDATES=false
 export USE_DEFAULT=1
 
-python main.py --use-default
+python main.py --serve
 ```
 
 ## Schedule
 
-Run the job weekly on Railway. Tuesday is the normal choice.
+The service runs continuously and can be triggered by CarlBot or another external command. The actual report generation uses the default league/env configuration unless a caller sends override values via the `/trigger` endpoint.

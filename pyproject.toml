@@ -34,6 +34,8 @@ dependencies = [
     "urllib3==2.2.3",
     "yahoo-oauth==2.1.1",
     "yfpy==17.0.0",
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
 ]
 
 [dependency-groups]
