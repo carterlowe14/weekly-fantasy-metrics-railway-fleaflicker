@@ -1,8 +1,15 @@
 {
   "name": "weekly-fantasy-metrics-railway-fleaflicker",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Scrapes fleaflicker and generates pdf summary of report. Designed to run on railway.",
+  "main": "server.js",
   "scripts": {
-    "start": "python main.py --serve",
-    "healthcheck": "python -c \"import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + str(os.getenv('PORT', '8080')) + '/health').read()\""
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
