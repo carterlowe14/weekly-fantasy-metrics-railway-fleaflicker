@@ -1,7 +1,0 @@
-README.md
-pyproject.toml
-fantasy_football_metrics_weekly_report.egg-info/PKG-INFO
-fantasy_football_metrics_weekly_report.egg-info/SOURCES.txt
-fantasy_football_metrics_weekly_report.egg-info/dependency_links.txt
-fantasy_football_metrics_weekly_report.egg-info/requires.txt
-fantasy_football_metrics_weekly_report.egg-info/top_level.txt

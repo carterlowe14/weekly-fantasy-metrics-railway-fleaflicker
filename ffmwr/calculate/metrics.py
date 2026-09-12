@@ -66,18 +66,15 @@ class CalculateMetrics(object):
         logger.debug("Creating league division standings data.")
 
         # group teams into divisions
-        division_groups = [
-            list(group)
-            for key, group in itertools.groupby(
-                sorted(league.standings, key=lambda x: x.division), lambda x: str(x.division)
-            )
-        ]
+        division_groups = defaultdict(list)
+        for team in league.standings:
+            division_groups[str(team.division)].append(team)
 
         # sort the teams
         sorted_divisions = {}
-        for division_num in range(1, league.num_divisions + 1):
-            sorted_divisions[division_num] = sorted(
-                division_groups[division_num - 1],
+        for division_id, teams in division_groups.items():
+            sorted_divisions[division_id] = sorted(
+                teams,
                 key=lambda x: (
                     x.record.get_wins(),
                     -x.record.get_losses(),
