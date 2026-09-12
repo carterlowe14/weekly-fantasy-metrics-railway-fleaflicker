@@ -1,0 +1,8 @@
+{
+  "name": "weekly-fantasy-metrics-railway-fleaflicker",
+  "private": true,
+  "scripts": {
+    "start": "python main.py --serve",
+    "healthcheck": "python -c \"import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + str(os.getenv('PORT', '8080')) + '/health').read()\""
+  }
+}
