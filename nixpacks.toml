@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ["python311", "google-chrome", "chromedriver"]
+nixPkgs = ["google-chrome", "chromedriver"]
