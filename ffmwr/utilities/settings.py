@@ -434,18 +434,17 @@ def get_app_settings_from_env_file(env_file_path: Path) -> AppSettings:
     if env_file_path.is_file():
         if os.access(env_file_path, mode=os.R_OK):
             env_vars_from_file = set(dotenv_values(env_file_path).keys())
-            required_env_keys = {field[0] for field in env_fields if field[0] != "SEASON"}
-            missing_env_vars = required_env_keys.difference(env_vars_from_file)
+            recommended_env_keys = {"PLATFORM", "LEAGUE_ID"}
+            missing_env_vars = recommended_env_keys.difference(env_vars_from_file).difference(os.environ.keys())
 
             if missing_env_vars:
-                logger.error(
-                    f"Your local \".env\" file is missing the following variables:\n\n"
-                    f"{', '.join(missing_env_vars)}\n\n"
-                    f"Please update your \".env\" file and try again."
+                logger.warning(
+                    "Your local \".env\" file is missing recommended values for: "
+                    f"{', '.join(sorted(missing_env_vars))}. "
+                    "The app will continue with defaults and can still be configured via Railway env vars."
                 )
-                sys.exit(1)
             else:
-                logger.debug('All required local ".env" file variables present.')
+                logger.debug('All recommended local ".env" file variables present.')
 
             logger.debug('The ".env" file is available. Running Fantasy Football Metrics Weekly Report app...')
 
