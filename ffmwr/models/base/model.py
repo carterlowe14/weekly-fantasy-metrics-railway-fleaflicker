@@ -4,8 +4,9 @@ __author__ = "Wren J. R. (uberfastman)"
 __email__ = "uberfastman@uberfastman.dev"
 
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ffmwr.calculate.playoff_probabilities import PlayoffProbabilities
 from ffmwr.features.bad_boy import BadBoyFeature
@@ -14,6 +15,50 @@ from ffmwr.features.high_roller import HighRollerFeature
 from ffmwr.utilities.settings import AppSettings
 from ffmwr.utilities.utils import FFMWRPythonObjectJson, generate_normalized_player_key
 
+
+@dataclass
+class TeamMetricResult:
+    rank: int
+    team_name: str
+    manager: str
+    value: Any
+
+@dataclass
+class BadBoyResult:
+    rank: int
+    team_name: str
+    manager: str
+    points: int
+    worst_offense: str
+    num_offenders: int
+
+@dataclass
+class BeefResult:
+    rank: int
+    team_name: str
+    manager: str
+    tabbu: float
+
+@dataclass
+class HighRollerResult:
+    rank: int
+    team_name: str
+    manager: str
+    fines_total: float
+    worst_violation: str
+    worst_violation_fine: float
+
+@dataclass
+class TeamSummary:
+    team_id: str
+    name: str
+    manager: str
+    points: float
+    coaching_efficiency: Any
+    luck: float
+    optimal_points: float
+    z_score: Any
+    power_ranking: Optional[int] = None
 
 class BaseLeague(FFMWRPythonObjectJson):
     def __init__(

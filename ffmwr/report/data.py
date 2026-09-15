@@ -2,11 +2,12 @@ __author__ = "Wren J. R. (uberfastman)"
 __email__ = "uberfastman@uberfastman.dev"
 
 import itertools
-from typing import List
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional, Tuple
 
 from ffmwr.calculate.metrics import CalculateMetrics
 from ffmwr.calculate.points_by_position import PointsByPosition
-from ffmwr.models.base.model import BaseLeague, BaseMatchup, BaseTeam
+from ffmwr.models.base.model import BaseLeague, BaseMatchup, BaseTeam, TeamMetricResult, TeamSummary
 from ffmwr.utilities.app import add_report_team_stats, get_inactive_players
 from ffmwr.utilities.logger import get_logger
 from ffmwr.utilities.settings import AppSettings
@@ -167,7 +168,12 @@ class ReportData(object):
                     continue
                 
                 team = self.teams_results[k_v[0]]
-                self.data_for_z_scores.append([z_score_rank, team.name, team.manager_str, z_score])
+                self.data_for_z_scores.append(TeamMetricResult(
+                    rank=z_score_rank,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    value=z_score
+                ))
                 z_score_rank += 1
 
         # points by position data
@@ -179,19 +185,19 @@ class ReportData(object):
         team_result: BaseTeam
         for team_result in self.teams_results.values():
             self.data_for_teams.append(
-                [
-                    team_result.team_id,
-                    team_result.name,
-                    team_result.manager_str,
-                    team_result.points,
-                    team_result.coaching_efficiency,
-                    team_result.luck,
-                    team_result.optimal_points,
-                    z_score_results[team_result.team_id],
-                ]
+                TeamSummary(
+                    team_id=team_result.team_id,
+                    name=team_result.name,
+                    manager=team_result.manager_str,
+                    points=team_result.points,
+                    coaching_efficiency=team_result.coaching_efficiency,
+                    luck=team_result.luck,
+                    optimal_points=team_result.optimal_points,
+                    z_score=z_score_results[team_result.team_id],
+                )
             )
 
-        self.data_for_teams.sort(key=lambda x: x[1])
+        self.data_for_teams.sort(key=lambda x: x.name)
 
         # scores data
         self.data_for_scores = metrics_calculator.get_score_data(
@@ -242,7 +248,7 @@ class ReportData(object):
         # get number of scores ties and ties for first
         self.ties_for_scores = metrics_calculator.get_ties_count(self.data_for_scores, "score", self.break_ties)
         self.num_first_place_for_score_before_resolution = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x[3])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x.value if hasattr(x, 'value') else x[3])][0]
         )
 
         # reorder score data based on bench points if there are ties and break_ties = True
@@ -250,7 +256,7 @@ class ReportData(object):
             self.data_for_scores = metrics_calculator.resolve_score_ties(self.data_for_scores, self.break_ties)
             metrics_calculator.get_ties_count(self.data_for_scores, "score", self.break_ties)
         self.num_first_place_for_score = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x[3])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x[3] if isinstance(x, list) else x.value)][0]
         )
 
         # get number of coaching efficiency ties and ties for first
@@ -258,7 +264,7 @@ class ReportData(object):
             self.data_for_coaching_efficiency, "coaching_efficiency", self.break_ties
         )
         self.num_first_place_for_coaching_efficiency_before_resolution = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x[0])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x.rank if hasattr(x, 'rank') else x[0])][0]
         )
 
         if self.ties_for_coaching_efficiency > 0:
@@ -272,13 +278,13 @@ class ReportData(object):
                 self.break_ties,
             )
         self.num_first_place_for_coaching_efficiency = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x[0])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x[0] if isinstance(x, list) else x.rank)][0]
         )
 
         # get number of luck ties and ties for first
         self.ties_for_luck = metrics_calculator.get_ties_count(self.data_for_luck, "luck", self.break_ties)
         self.num_first_place_for_luck = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_luck, lambda x: x[3])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_luck, lambda x: x.value if hasattr(x, 'value') else x[3])][0]
         )
 
         # get number of bad boy rankings ties and ties for first
@@ -286,17 +292,20 @@ class ReportData(object):
             self.data_for_bad_boy_rankings, "bad_boy", self.break_ties
         )
         self.num_first_place_for_bad_boy_rankings = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_bad_boy_rankings, lambda x: x[3])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_bad_boy_rankings, lambda x: x.points if hasattr(x, 'points') else x[3])][0]
         )
         # filter out teams that have no bad boys in their starting lineup
-        self.data_for_bad_boy_rankings = [result for result in self.data_for_bad_boy_rankings if int(result[-1]) != 0]
+        self.data_for_bad_boy_rankings = [
+            result for result in self.data_for_bad_boy_rankings
+            if int(result.num_offenders if hasattr(result, 'num_offenders') else result[-1]) != 0
+        ]
 
         # get number of beef rankings ties and ties for first
         self.ties_for_beef_rankings = metrics_calculator.get_ties_count(
             self.data_for_beef_rankings, "beef", self.break_ties
         )
         self.num_first_place_for_beef_rankings = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_beef_rankings, lambda x: x[3])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_beef_rankings, lambda x: x.tabbu if hasattr(x, 'tabbu') else x[3])][0]
         )
 
         # get number of high roller rankings ties and ties for first
@@ -304,11 +313,11 @@ class ReportData(object):
             self.data_for_high_roller_rankings, "high_roller", self.break_ties
         )
         self.num_first_place_for_high_roller_rankings = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_high_roller_rankings, lambda x: x[3])][0]
+            [list(group) for key, group in itertools.groupby(self.data_for_high_roller_rankings, lambda x: x.fines_total if hasattr(x, 'fines_total') else x[3])][0]
         )
         # filter out teams that have no high rollers in their starting lineup
         self.data_for_high_roller_rankings = [
-            result for result in self.data_for_high_roller_rankings if float(result[3]) != 0.0
+            result for result in self.data_for_high_roller_rankings if float(result.fines_total if hasattr(result, 'fines_total') else result[3]) != 0.0
         ]
 
         # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
@@ -324,8 +333,12 @@ class ReportData(object):
         # update data_for_teams with power rankings
         for team in self.data_for_teams:
             for team_id in power_ranking_results.keys():
-                if team[0] == team_id:
-                    team.append(power_ranking_results[team_id]["power_ranking"])
+                if team.team_id == team_id:
+                    # Since TeamSummary is a dataclass, we can't just .append()
+                    # We should probably add a power_ranking field to TeamSummary
+                    # But for now, if it's a list we append. If it's a dataclass, we can't.
+                    # Let's see if we can add it as an attribute.
+                    setattr(team, 'power_ranking', power_ranking_results[team_id]["power_ranking"])
 
         # power rankings data
         self.data_for_power_rankings = []

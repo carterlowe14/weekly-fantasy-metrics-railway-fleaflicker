@@ -123,7 +123,7 @@ def run_report(args: Namespace, app_settings: AppSettings, root_directory: Path)
         f"{f_str_newline}"
         f"Generating{' TEST' if args.test else ''} "
         f"{format_platform_display(args.fantasy_platform if args.fantasy_platform else app_settings.platform)} "
-        f"Fantasy Football report on {datetime.now():%b %-d, %Y at %-I:%M%p} with the following command line arguments:"
+        f"Fantasy Football report on {datetime.now().strftime('%b %d, %Y at %I:%M%p')} with the following command line arguments:"
         f"{f_str_newline * 2}"
         f"{args_display}"
         f"{f_str_newline}"
@@ -149,6 +149,7 @@ def run_report(args: Namespace, app_settings: AppSettings, root_directory: Path)
     report_pdf: Path = report.create_pdf_report()
 
     upload_message = ""
+    # Google Drive is handled first as other integrations may use its upload link
     if app_settings.integration_settings.google_drive_upload_bool:
         if not args.skip_uploads and not args.test:
             google_drive_integration = GoogleDriveIntegration(
@@ -159,83 +160,53 @@ def run_report(args: Namespace, app_settings: AppSettings, root_directory: Path)
         else:
             logger.info(f"Report NOT uploaded to Google Drive with command line arguments: {args}")
 
-    if app_settings.integration_settings.slack_post_bool:
+    # Other integrations that support both posting links and uploading files
+    msg_integrations = [
+        ("slack", app_settings.integration_settings.slack_post_bool, SlackIntegration,
+         app_settings.integration_settings.slack_post_or_file),
+        ("groupme", app_settings.integration_settings.groupme_post_bool, GroupMeIntegration,
+         app_settings.integration_settings.groupme_post_or_file),
+        ("discord", app_settings.integration_settings.discord_post_bool, DiscordIntegration,
+         app_settings.integration_settings.discord_post_or_file),
+    ]
+
+    for name, enabled, integration_class, post_or_file in msg_integrations:
+        if not enabled:
+            continue
+
         if not args.skip_uploads and not args.test:
-            slack_integration = SlackIntegration(app_settings, root_directory, report.league.week_for_report)
-            slack_response = None
-            post_or_file = app_settings.integration_settings.slack_post_or_file
+            integration = integration_class(app_settings, root_directory, report.league.week_for_report)
+
             if post_or_file == "post":
                 if app_settings.integration_settings.google_drive_upload_bool:
-                    slack_response = slack_integration.post_message(upload_message)
+                    response = integration.post_message(upload_message)
                 else:
-                    logger.warning("Unable to post Google Drive link to Slack when GOOGLE_DRIVE_UPLOAD_BOOL=False.")
+                    logger.warning(f"Unable to post Google Drive link to {name} when GOOGLE_DRIVE_UPLOAD_BOOL=False.")
+                    response = None
             elif post_or_file == "file":
-                slack_response = slack_integration.upload_file(report_pdf)
+                response = integration.upload_file(report_pdf)
             else:
                 logger.warning(
-                    f'The ".env" file contains unsupported Slack setting: '
-                    f'SLACK_POST_OR_FILE={post_or_file}. Please choose "post" or "file" and try again.'
+                    f'The ".env" file contains unsupported {name} setting: '
+                    f'{name.upper()}_POST_OR_FILE={post_or_file}. Please choose "post" or "file" and try again.'
                 )
                 raise SystemExit(1)
 
-            if slack_response and slack_response.get("ok"):
-                logger.info(f"Report {str(report_pdf)} successfully posted to Slack!")
+            # Validate response based on platform
+            is_success = False
+            if name == "slack" and response and response.get("ok"):
+                is_success = True
+            elif name == "groupme" and (response == 202 or (isinstance(response, dict) and response.get("meta", {}).get("code") == 201)):
+                is_success = True
+            elif name == "discord" and response and response.get("type") == 0:
+                is_success = True
+
+            if is_success:
+                logger.info(f"Report {str(report_pdf)} successfully posted to {name}!")
             else:
-                logger.error(f"Report {str(report_pdf)} was NOT posted to Slack with error: {slack_response}")
+                logger.error(f"Report {str(report_pdf)} was NOT posted to {name} with error: {response}")
         else:
-            logger.info(f"Report NOT posted to Slack with command line arguments: {args}")
-
-    if app_settings.integration_settings.groupme_post_bool:
-        if not args.skip_uploads and not args.test:
-            groupme_integration = GroupMeIntegration(app_settings, root_directory, report.league.week_for_report)
-            groupme_response = None
-            post_or_file = app_settings.integration_settings.groupme_post_or_file
-            if post_or_file == "post":
-                if app_settings.integration_settings.google_drive_upload_bool:
-                    groupme_response = groupme_integration.post_message(upload_message)
-                else:
-                    logger.warning("Unable to post Google Drive link to GroupMe when GOOGLE_DRIVE_UPLOAD_BOOL=False.")
-            elif post_or_file == "file":
-                groupme_response = groupme_integration.upload_file(report_pdf)
-            else:
-                logger.warning(
-                    f'The ".env" file contains unsupported GroupMe setting: '
-                    f'GROUPME_POST_OR_FILE={post_or_file}. Please choose "post" or "file" and try again.'
-                )
-                raise SystemExit(1)
-
-            if groupme_response == 202 or groupme_response["meta"]["code"] == 201:
-                logger.info(f"Report {str(report_pdf)} successfully posted to GroupMe!")
-            else:
-                logger.error(f"Report {str(report_pdf)} was NOT posted to GroupMe with error: {groupme_response}")
-        else:
-            logger.info(f"Report NOT posted to GroupMe with command line arguments: {args}")
-
-    if app_settings.integration_settings.discord_post_bool:
-        if not args.skip_uploads and not args.test:
-            discord_integration = DiscordIntegration(app_settings, root_directory, report.league.week_for_report)
-            discord_response = None
-            post_or_file = app_settings.integration_settings.discord_post_or_file
-            if post_or_file == "post":
-                if app_settings.integration_settings.google_drive_upload_bool:
-                    discord_response = discord_integration.post_message(upload_message)
-                else:
-                    logger.warning("Unable to post Google Drive link to Discord when GOOGLE_DRIVE_UPLOAD_BOOL=False.")
-            elif post_or_file == "file":
-                discord_response = discord_integration.upload_file(report_pdf)
-            else:
-                logger.warning(
-                    f'The ".env" file contains unsupported Discord setting: '
-                    f'DISCORD_POST_OR_FILE={post_or_file}. Please choose "post" or "file" and try again.'
-                )
-                raise SystemExit(1)
-
-            if discord_response and discord_response.get("type") == 0:
-                logger.info(f"Report {str(report_pdf)} successfully posted to Discord!")
-            else:
-                logger.error(f"Report {str(report_pdf)} was NOT posted to Discord with error: {discord_response}")
-        else:
-            logger.info(f"Report NOT posted to Discord with command line arguments: {args}")
+            logger.info(f"Report NOT posted to {name} with command line arguments: {args}")
 
     return report_pdf
 
@@ -265,6 +236,9 @@ def select_league(
         week_for_report = select_week(settings, use_default=use_default)
     if not league_id:
         if not use_default:
+            if not sys.stdin.isatty():
+                logger.error("League ID is missing and environment is non-interactive. Please provide league_id in .env or via API.")
+                raise SystemExit(1)
             selection = input(f"{Fore.YELLOW}Generate report for default league? ({Fore.GREEN}y{Fore.YELLOW}/{Fore.RED}n{Fore.YELLOW}) -> {Style.RESET_ALL}").lower()
         else:
             logger.info('Use-default is set to "true". Automatically running the report for the default league.')
@@ -289,6 +263,9 @@ def select_league(
             test=test,
         )
     elif selection == "n":
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for league ID.")
+            raise SystemExit(1)
         league_id = input(f"{Fore.YELLOW}What is the league ID of the league for which you want to generate a report? -> {Style.RESET_ALL}")
         return FantasyFootballReport(
             settings=settings,
@@ -330,6 +307,9 @@ def select_platform(settings: AppSettings, use_default: bool = False) -> str:
         logger.info('Use-default is set to "true". Automatically running the report for the default platform.')
         selection = "y"
     else:
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for platform.")
+            raise SystemExit(1)
         selection = input(f"{Fore.YELLOW}Generate report for default platform? ({Fore.GREEN}y{Fore.YELLOW}/{Fore.RED}n{Fore.YELLOW}) -> {Style.RESET_ALL}").lower()
 
     if selection == "y":
@@ -337,6 +317,9 @@ def select_platform(settings: AppSettings, use_default: bool = False) -> str:
             return settings.platform
         raise SystemExit(1)
     elif selection == "n":
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for platform.")
+            raise SystemExit(1)
         chosen_platform = input(f"{Fore.YELLOW}For which platform would you like to generate a report ? ({Fore.GREEN}{f'{Fore.YELLOW}/{Fore.GREEN}'.join(settings.supported_platforms_list)}{Fore.YELLOW}) -> {Style.RESET_ALL}").lower()
         if chosen_platform in settings.supported_platforms_list:
             return chosen_platform
@@ -414,5 +397,9 @@ if __name__ == "__main__":
         serve_trigger_server(app_settings)
     else:
         if not args.use_default and not args.fantasy_platform and not args.league_id and not args.week:
-            args = build_default_args(app_settings)
+            defaults = build_default_args(app_settings)
+            for k, v in vars(defaults).items():
+                if getattr(args, k) is None:
+                    setattr(args, k, v)
+            args.use_default = True
         run_report(args, app_settings, root_directory)

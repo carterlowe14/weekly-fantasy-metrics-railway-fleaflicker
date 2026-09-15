@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from ffmwr.models.base.model import BaseLeague, BasePlayer, BaseRecord, BaseTeam
+from ffmwr.models.base.model import BaseLeague, BasePlayer, BaseRecord, BaseTeam, TeamMetricResult, BadBoyResult, BeefResult, HighRollerResult
 from ffmwr.utilities.logger import get_logger
 
 logger = get_logger(__name__, propagate=False)
@@ -284,44 +284,47 @@ class CalculateMetrics(object):
         return sorted_playoff_probs_data
 
     @staticmethod
-    def get_score_data(score_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_score_data(score_results: List[BaseTeam]) -> List[TeamMetricResult]:
         logger.debug("Creating league score data.")
 
         score_results_data = []
         place = 1
         team: BaseTeam
         for team in score_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
-            ranked_weekly_score = f"{team.points:.2f}"
-            ranked_weekly_bench_score = f"{team.bench_points:.2f}"
-
             score_results_data.append(
-                [place, ranked_team_name, ranked_team_manager, ranked_weekly_score, ranked_weekly_bench_score]
+                TeamMetricResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    value=f"{team.points:.2f}"
+                )
             )
-
             place += 1
 
         return score_results_data
 
-    def get_coaching_efficiency_data(self, coaching_efficiency_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_coaching_efficiency_data(self, coaching_efficiency_results: List[BaseTeam]) -> List[TeamMetricResult]:
         logger.debug("Creating league coaching efficiency data.")
 
         coaching_efficiency_results_data = []
         place = 1
         team: BaseTeam
         for team in coaching_efficiency_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
             ranked_coaching_efficiency = team.coaching_efficiency
 
             if ranked_coaching_efficiency == "DQ":
                 self.coaching_efficiency_dq_count += 1
+                value = "DQ"
             else:
-                ranked_coaching_efficiency = f"{ranked_coaching_efficiency:.2f}%"
+                value = f"{ranked_coaching_efficiency:.2f}%"
 
             coaching_efficiency_results_data.append(
-                [place, ranked_team_name, ranked_team_manager, ranked_coaching_efficiency]
+                TeamMetricResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    value=value
+                )
             )
 
             place += 1
@@ -329,114 +332,138 @@ class CalculateMetrics(object):
         return coaching_efficiency_results_data
 
     @staticmethod
-    def get_luck_data(luck_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_luck_data(luck_results: List[BaseTeam]) -> List[TeamMetricResult]:
         logger.debug("Creating league luck data.")
 
         luck_results_data = []
         place = 1
         team: BaseTeam
         for team in luck_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
-            ranked_luck = f"{team.luck:.2f}%"
-            weekly_overall_record = team.weekly_overall_record.get_record_str()
-
-            luck_results_data.append([place, ranked_team_name, ranked_team_manager, ranked_luck, weekly_overall_record])
-
+            luck_results_data.append(
+                TeamMetricResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    value=f"{team.luck:.2f}%"
+                )
+            )
             place += 1
         return luck_results_data
 
     @staticmethod
-    def get_optimal_score_data(score_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_optimal_score_data(score_results: List[BaseTeam]) -> List[TeamMetricResult]:
         logger.debug("Creating league optimal score data.")
 
         optimal_score_results_data = []
         place = 1
         team: BaseTeam
         for team in score_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
-            ranked_weekly_optimal_score = f"{team.optimal_points:.2f}"
-
             optimal_score_results_data.append(
-                [place, ranked_team_name, ranked_team_manager, ranked_weekly_optimal_score]
+                TeamMetricResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    value=f"{team.optimal_points:.2f}"
+                )
             )
-
             place += 1
 
         return optimal_score_results_data
 
     @staticmethod
-    def get_bad_boy_data(bad_boy_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_bad_boy_data(bad_boy_results: List[BaseTeam]) -> List[BadBoyResult]:
         logger.debug("Creating league bad boys data.")
 
         bad_boy_results_data = []
         place = 1
         team: BaseTeam
         for team in bad_boy_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
-            ranked_bad_boy_points = str(team.bad_boy_points)
-            ranked_offense = team.worst_offense
-            ranked_count = str(team.num_offenders)
-
             bad_boy_results_data.append(
-                [place, ranked_team_name, ranked_team_manager, ranked_bad_boy_points, ranked_offense, ranked_count]
+                BadBoyResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    points=team.bad_boy_points,
+                    worst_offense=team.worst_offense,
+                    num_offenders=team.num_offenders
+                )
             )
-
             place += 1
         return bad_boy_results_data
 
     @staticmethod
-    def get_beef_rank_data(beef_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_beef_rank_data(beef_results: List[BaseTeam]) -> List[BeefResult]:
         logger.debug("Creating league beef data.")
 
         beef_results_data = []
         place = 1
         team: BaseTeam
         for team in beef_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
-            ranked_beef_points = f"{team.tabbu:.3f}"
-
-            beef_results_data.append([place, ranked_team_name, ranked_team_manager, ranked_beef_points])
+            beef_results_data.append(
+                BeefResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    tabbu=team.tabbu
+                )
+            )
             place += 1
         return beef_results_data
 
     @staticmethod
-    def get_high_roller_data(high_roller_results: List[BaseTeam]) -> List[List[Any]]:
+    def get_high_roller_data(high_roller_results: List[BaseTeam]) -> List[HighRollerResult]:
         logger.debug("Creating league high roller data.")
 
         high_roller_results_data = []
         place = 1
         team: BaseTeam
         for team in high_roller_results:
-            ranked_team_name = team.name
-            ranked_team_manager = team.manager_str
-            ranked_total_fines = str(team.fines_total)
-            ranked_violation = team.worst_violation
-            ranked_violation_fine = str(team.worst_violation_fine)
-
             high_roller_results_data.append(
-                [
-                    place,
-                    ranked_team_name,
-                    ranked_team_manager,
-                    ranked_total_fines,
-                    ranked_violation,
-                    ranked_violation_fine,
-                ]
+                HighRollerResult(
+                    rank=place,
+                    team_name=team.name,
+                    manager=team.manager_str,
+                    fines_total=team.fines_total,
+                    worst_violation=team.worst_violation,
+                    worst_violation_fine=team.worst_violation_fine
+                )
             )
-
             place += 1
         return high_roller_results_data
 
-    def get_ties_count(self, results_data: List[List[Any]], tie_type: str, break_ties: bool) -> int:
+    @staticmethod
+    def _get_metric_value(x: Any) -> Any:
+        if isinstance(x, list):
+            return x[3] if len(x) > 3 else None
+        if hasattr(x, 'value'): return x.value
+        if hasattr(x, 'points'): return x.points
+        if hasattr(x, 'fines_total'): return x.fines_total
+        if hasattr(x, 'tabbu'): return x.tabbu
+        return None
+
+    def get_ties_count(self, results_data: List[Any], tie_type: str, break_ties: bool) -> int:
+        def get_val(x):
+            return self._get_metric_value(x)
+
         if tie_type == "power_ranking":
-            groups = [list(group) for key, group in itertools.groupby(results_data, lambda x: x[0])]
+            key_func = lambda x: x.rank if hasattr(x, 'rank') else (x[0] if isinstance(x, list) else None)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
+            num_ties = self.count_ties(groups)
+        elif tie_type == "bad_boy":
+            key_func = lambda x: get_val(x)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
+            num_ties = self.count_ties(groups)
+        elif tie_type == "high_roller":
+            key_func = lambda x: get_val(x)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
+            num_ties = self.count_ties(groups)
+        elif tie_type == "beef":
+            key_func = lambda x: get_val(x)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
             num_ties = self.count_ties(groups)
         else:
-            groups = [list(group) for key, group in itertools.groupby(results_data, lambda x: x[3])]
+            key_func = lambda x: get_val(x)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
             num_ties = self.count_ties(groups)
 
         # if there are ties, record them and break them if possible
@@ -446,65 +473,99 @@ class CalculateMetrics(object):
             place = 1
             while ties_count != num_ties:
                 for group in groups:
-                    group_has_ties = len(group) > 1 and "DQ" not in group[0]
+                    first_elem = group[0]
+                    val = get_val(first_elem)
+                    group_has_ties = len(group) > 1 and val != "DQ"
                     if group_has_ties:
                         ties_count += sum(range(len(group)))
 
                     for team in group:
                         if tie_type == "power_ranking":
+                            rank_val = team.rank if hasattr(team, 'rank') else (team[0] if isinstance(team, list) else None)
+                            name_val = team.team_name if hasattr(team, 'team_name') else (team[1] if isinstance(team, list) else None)
+                            mgr_val = team.manager if hasattr(team, 'manager') else (team[2] if isinstance(team, list) else None)
                             results_data[team_index] = [
-                                str(team[0]) + ("*" if group_has_ties else ""),
-                                team[1],
-                                team[2],
+                                str(rank_val) + ("*" if group_has_ties else ""),
+                                name_val,
+                                mgr_val,
                             ]
                         elif tie_type == "score" and break_ties:
-                            results_data[team_index] = [str(place), team[1], team[2], team[3]]
+                            rank_val = place
+                            name_val = team.team_name if hasattr(team, 'team_name') else (team[1] if isinstance(team, list) else None)
+                            mgr_val = team.manager if hasattr(team, 'manager') else (team[2] if isinstance(team, list) else None)
+                            val_val = get_val(team)
+                            results_data[team_index] = [str(rank_val), name_val, mgr_val, val_val]
                             if group.index(team) != (len(group) - 1):
                                 place += 1
                         elif tie_type == "bad_boy":
+                            rank_val = place
+                            name_val = team.team_name if hasattr(team, 'team_name') else (team[1] if isinstance(team, list) else None)
+                            mgr_val = team.manager if hasattr(team, 'manager') else (team[2] if isinstance(team, list) else None)
+                            val_val = get_val(team)
+                            worst_off = team.worst_offense if hasattr(team, 'worst_offense') else (team[4] if isinstance(team, list) else None)
+                            num_off = team.num_offenders if hasattr(team, 'num_offenders') else (team[5] if isinstance(team, list) else None)
                             results_data[team_index] = [
-                                str(place) + ("*" if group_has_ties else ""),
-                                team[1],
-                                team[2],
-                                team[3],
-                                team[4],
-                                team[5],
+                                str(rank_val) + ("*" if group_has_ties else ""),
+                                name_val,
+                                mgr_val,
+                                val_val,
+                                worst_off,
+                                num_off,
                             ]
                         elif tie_type == "high_roller":
+                            rank_val = place
+                            name_val = team.team_name if hasattr(team, 'team_name') else (team[1] if isinstance(team, list) else None)
+                            mgr_val = team.manager if hasattr(team, 'manager') else (team[2] if isinstance(team, list) else None)
+                            val_val = get_val(team)
+                            worst_vio = team.worst_violation if hasattr(team, 'worst_violation') else (team[4] if isinstance(team, list) else None)
+                            worst_fine = team.worst_violation_fine if hasattr(team, 'worst_violation_fine') else (team[5] if isinstance(team, list) else None)
                             results_data[team_index] = [
-                                str(place) + ("*" if group_has_ties else ""),
-                                team[1],
-                                team[2],
-                                team[3],
-                                team[4],
-                                team[5],
+                                str(rank_val) + ("*" if group_has_ties else ""),
+                                name_val,
+                                mgr_val,
+                                val_val,
+                                worst_vio,
+                                worst_fine,
                             ]
                         else:
+                            rank_val = place
+                            name_val = team.team_name if hasattr(team, 'team_name') else (team[1] if isinstance(team, list) else None)
+                            mgr_val = team.manager if hasattr(team, 'manager') else (team[2] if isinstance(team, list) else None)
+                            val_val = get_val(team)
                             results_data[team_index] = [
-                                str(place) + ("*" if group_has_ties else ""),
-                                team[1],
-                                team[2],
-                                team[3],
+                                str(rank_val) + ("*" if group_has_ties else ""),
+                                name_val,
+                                mgr_val,
+                                val_val,
                             ]
 
                         if tie_type == "score":
-                            results_data[team_index].append(team[4])
+                            if not hasattr(team, 'rank'): # it's a list
+                                results_data[team_index].append(team[4] if len(team) > 4 else None)
+                            else:
+                                results_data[team_index].append(None)
 
                         team_index += 1
                     place += 1
 
         if tie_type == "bad_boy":
-            groups = [list(group) for key, group in itertools.groupby(results_data, lambda x: x[3])]
+            key_func = lambda x: get_val(x)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
             num_ties = 0
             for group in groups:
-                if len(group) > 1 and int(group[0][3]) > 0:
+                first_elem = group[0]
+                val = get_val(first_elem)
+                if len(group) > 1 and (val is not None and float(val) > 0):
                     num_ties += sum(range(len(group)))
 
         if tie_type == "high_roller":
-            groups = [list(group) for key, group in itertools.groupby(results_data, lambda x: x[3])]
+            key_func = lambda x: get_val(x)
+            groups = [list(group) for key, group in itertools.groupby(results_data, key_func)]
             num_ties = 0
             for group in groups:
-                if len(group) > 1 and float(group[0][3]) > 0:
+                first_elem = group[0]
+                val = get_val(first_elem)
+                if len(group) > 1 and (val is not None and float(val) > 0):
                     num_ties += sum(range(len(group)))
 
         return num_ties
@@ -513,19 +574,31 @@ class CalculateMetrics(object):
     def count_ties(groups: List[List[Any]]) -> int:
         num_ties = 0
         for group in groups:
-            if len(group) > 1 and "DQ" not in group[0]:
+            first_elem = group[0]
+            val = CalculateMetrics._get_metric_value(first_elem)
+            if len(group) > 1 and val != "DQ":
                 num_ties += sum(range(len(group)))
 
         return num_ties
 
     @staticmethod
-    def resolve_score_ties(data_for_scores: List[List[Any]], break_ties: bool) -> List[List[Any]]:
-        groups = [list(group) for key, group in itertools.groupby(data_for_scores, lambda x: x[3])]
+    def resolve_score_ties(data_for_scores: List[Any], break_ties: bool) -> List[List[Any]]:
+        # Convert dataclasses to lists to allow for modification and additional columns
+        converted_data = []
+        for item in data_for_scores:
+            if hasattr(item, 'rank'):
+                converted_data.append([item.rank, item.team_name, item.manager, item.value])
+            else:
+                converted_data.append(list(item))
+
+        groups = [list(group) for key, group in itertools.groupby(converted_data, lambda x: x[3])]
 
         resolved_score_results_data = []
         place = 1
         for group in groups:
-            for team in sorted(group, key=lambda x: x[-1], reverse=True):
+            # Tie-break based on bench points (assumed to be at index 4 if it exists)
+            sorted_group = sorted(group, key=lambda x: (x[4] if len(x) > 4 and x[4] is not None else 0), reverse=True)
+            for team in sorted_group:
                 if groups.index(group) != 0:
                     team[0] = place
                 else:
@@ -538,7 +611,7 @@ class CalculateMetrics(object):
 
     @staticmethod
     def resolve_coaching_efficiency_ties(
-        data_for_coaching_efficiency: List[List[Any]],
+        data_for_coaching_efficiency: List[Any],
         ties_for_coaching_efficiency: int,
         league: BaseLeague,
         teams_results: Dict[str, BaseTeam],
@@ -548,13 +621,20 @@ class CalculateMetrics(object):
     ) -> List[List[Any]]:
         logger.debug("Resolving coaching efficiency ties.")
 
-        # if league.player_data_by_week_function:
+        # Convert dataclasses to lists
+        converted_data = []
+        for item in data_for_coaching_efficiency:
+            if hasattr(item, 'rank'):
+                converted_data.append([item.rank, item.team_name, item.manager, item.value])
+            else:
+                converted_data.append(list(item))
+
         coaching_efficiency_results_data_with_tiebreakers = []
         bench_positions = league.bench_positions
 
         season_average_points_by_player_dict = defaultdict(list)
         if break_ties and ties_for_coaching_efficiency > 0 and week == int(week_for_report):
-            for ce_result in data_for_coaching_efficiency:
+            for ce_result in converted_data:
                 if ce_result[0] == "1*":
                     players = []
                     for team_result in teams_results.values():
@@ -568,15 +648,6 @@ class CalculateMetrics(object):
                         if player.selected_position not in bench_positions:
                             week_counter = 1
                             while week_counter <= int(week):
-                                # players_by_week = league.players_by_week[str(week_counter)]
-                                # if str(player.player_id) in players_by_week.keys():
-                                #     weekly_player_points = players_by_week[str(player.player_id)].points
-                                # else:
-                                #     weekly_player_points = league.get_player_data_by_week(
-                                #         str(player.player_id), week_counter)
-                                #
-                                # season_average_points_by_player_dict[player.player_id].append(weekly_player_points)
-
                                 players_by_week = league.players_by_week[str(week_counter)]
                                 if str(player.player_id) in players_by_week.keys():
                                     season_average_points_by_player_dict[player.player_id].append(
@@ -622,7 +693,7 @@ class CalculateMetrics(object):
                 for key, group in itertools.groupby(coaching_efficiency_results_data_with_tiebreakers, lambda x: x[3])
             ]
         else:
-            groups = [list(group) for key, group in itertools.groupby(data_for_coaching_efficiency, lambda x: x[3])]
+            groups = [list(group) for key, group in itertools.groupby(converted_data, lambda x: x[3])]
 
         resolved_coaching_efficiency_results_data = []
         place = 1
@@ -634,15 +705,18 @@ class CalculateMetrics(object):
                 resolved_coaching_efficiency_results_data.append(team)
                 place += 1
         return resolved_coaching_efficiency_results_data
-        # else:
-        #     logger.debug(
-        #         "No function to retrieve past player weekly points available. Cannot resolve coaching efficiency "
-        #         "ties.")
-        #     return data_for_coaching_efficiency
 
     @staticmethod
-    def resolve_season_average_ties(data_for_season_averages: List[List[Any]], with_percent: bool) -> List[List[Any]]:
-        groups = [list(group) for key, group in itertools.groupby(data_for_season_averages, lambda x: x[2])]
+    def resolve_season_average_ties(data_for_season_averages: List[Any], with_percent: bool) -> List[List[Any]]:
+        # Convert dataclasses to lists
+        converted_data = []
+        for item in data_for_season_averages:
+            if hasattr(item, 'rank'):
+                converted_data.append([item.rank, item.team_name, item.manager, item.value])
+            else:
+                converted_data.append(list(item))
+
+        groups = [list(group) for key, group in itertools.groupby(converted_data, lambda x: x[2])]
 
         resolved_season_average_results_data = []
         place = 1
@@ -817,7 +891,7 @@ class CalculateMetrics(object):
         luck_results = defaultdict(defaultdict)
 
         teams = league.teams_by_week.get(str(week))
-        
+
         # Handle weeks with no teams (e.g., playoff weeks where not all teams play)
         if not teams:
             logger.debug(f"No teams found for week {week}, skipping luck calculation")
@@ -866,21 +940,22 @@ class CalculateMetrics(object):
 
     @staticmethod
     def get_ranks_for_metric(
-        data_for_metric: List[List[Any]], power_ranked_teams: Dict[str, Dict[str, Any]], metric_ranking_key: str
+        data_for_metric: List[Any], power_ranked_teams: Dict[str, Dict[str, Any]], metric_ranking_key: str
     ):
         rank = 1
         for team in data_for_metric:
+            team_name = team.team_name if hasattr(team, 'team_name') else (team[1] if isinstance(team, list) else None)
             for team_rankings in power_ranked_teams.values():
-                if team[1] == team_rankings["name"]:
+                if team_name == team_rankings["name"]:
                     team_rankings[metric_ranking_key] = rank
             rank += 1
 
     def calculate_power_rankings(
         self,
         teams_results: Dict[str, BaseTeam],
-        data_for_scores: List[List[Any]],
-        data_for_coaching_efficiency: List[List[Any]],
-        data_for_luck: List[List[Any]],
+        data_for_scores: List[Any],
+        data_for_coaching_efficiency: List[Any],
+        data_for_luck: List[Any],
     ) -> Dict[str, Dict[str, Any]]:
         """avg of (weekly score rank + weekly coaching efficiency rank + weekly luck rank)"""
         logger.debug("Calculating power rankings.")
@@ -922,7 +997,7 @@ class CalculateMetrics(object):
                     logger.debug(f"Team {team_id} not found in all weeks, skipping z-score calculation")
                     results[team_id] = None
                     continue
-                
+
                 scores = [week[team_id].points for week in weekly_teams_results]
 
                 scores_excluding_current = scores[:-1]

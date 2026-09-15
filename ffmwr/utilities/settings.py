@@ -474,12 +474,12 @@ def get_app_settings_from_env_file(env_file_path: Path) -> AppSettings:
             logger.warning('Please only select "y" or "n".')
             sleep(0.25)
             return get_app_settings_from_env_file(env_file_path)
-
-    logger.error(
-        'No ".env" file was found and no required environment variables were detected. '
-        'For Railway please set PLATFORM, LEAGUE_ID, SEASON, and any required integration secrets before running the app.'
-    )
-    sys.exit(1)
+    else:
+        logger.error(
+            'Local ".env" file not found and no interactive terminal detected. '
+            'For Railway please set PLATFORM, LEAGUE_ID, SEASON, and any required integration secrets before running the app.'
+        )
+        sys.exit(1)
 
 
 def create_env_file_from_settings(
@@ -497,6 +497,9 @@ def create_env_file_from_settings(
     app_settings.replace_field_values_with_default()
 
     if not platform:
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for platform.")
+            sys.exit(1)
         supported_platforms_list = app_settings.supported_platforms_list
         platform = input(
             f"{Fore.GREEN}For which fantasy football platform are you generating a report? "
@@ -508,19 +511,25 @@ def create_env_file_from_settings(
                 f"{', or '.join([', '.join(supported_platforms_list[:-1]), supported_platforms_list[-1]])}"
             )
             sleep(0.25)
-            create_env_file_from_settings(env_fields, env_file_path)
+            return create_env_file_from_settings(env_fields, env_file_path, platform=platform, league_id=league_id)
 
         logger.debug(f'Retrieved fantasy football platform for ".env" file: {platform}')
 
     app_settings.platform = platform
 
     if not league_id:
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for league ID.")
+            sys.exit(1)
         league_id = input(f"{Fore.GREEN}What is your league ID? -> {Style.RESET_ALL}")
         logger.debug(f'Retrieved fantasy football league ID for ".env" file: {league_id}')
 
     app_settings.league_id = league_id
 
     if not season:
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for season.")
+            sys.exit(1)
         season = input(
             f"{Fore.GREEN}For which NFL season (starting year of season) are you generating reports? -> "
             f"{Style.RESET_ALL}"
@@ -545,6 +554,9 @@ def create_env_file_from_settings(
     app_settings.season = int(season)
 
     if not current_week:
+        if not sys.stdin.isatty():
+            logger.error("Environment is non-interactive. Cannot prompt for current week.")
+            sys.exit(1)
         current_week = input(
             f"{Fore.GREEN}What is the current week of the NFL season? (week following the last complete week) -> "
             f"{Style.RESET_ALL}"
@@ -552,7 +564,7 @@ def create_env_file_from_settings(
         try:
             if int(current_week) < 0 or int(current_week) > app_settings.nfl_season_length:
                 logger.warning(
-                    f"Week {current_week} is not a valid NFL week. Please select a week from 1 to "
+                    f"Week {int(current_week)} is not a valid NFL week. Please select a week from 1 to "
                     f"{app_settings.nfl_season_length}."
                 )
                 sleep(0.25)

@@ -46,3 +46,8 @@ class BaseIntegration(ABC):
     @abstractmethod
     def upload_file(self, file_path: Path) -> Any:
         raise NotImplementedError
+
+    def post_message(self, message: str) -> Any:
+        """Optional method to post a text message to the integration platform."""
+        logger.warning(f"{self.integration_type_title} integration does not support post_message.")
+        return None

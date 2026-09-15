@@ -112,14 +112,28 @@ class HighRollerFeature(BaseFeature):
         fined_players = html_soup.find("tbody").find_all("tr", {"class": ""})
 
         for player in fined_players:
-            player_full_name = player.find("a", {"class": "link"}).getText().strip()
-            player_team_abbr = player.find("img", {"class": "me-2"}).getText().strip()
-            player_position = player.find("td", {"class": "text-left details-sm"}).getText().strip()
+            # Retrieve player full name
+            name_elem = player.find("a", {"class": "link"})
+            player_full_name = name_elem.getText().strip() if name_elem else "Unknown Player"
+
+            # Retrieve player team abbreviation
+            img_elem = player.find("img", {"class": "me-2"})
+            player_team_abbr = img_elem.get('alt').strip() if img_elem and img_elem.get('alt') else None
+
+            # Retrieve player position
+            pos_elem = player.find("td", {"class": "text-left details-sm"})
+            player_position = pos_elem.getText().strip() if pos_elem else "Unknown"
+
+            if player_position not in self.position_types:
+                logger.warning(f"Unknown position '{player_position}' for player {player_full_name}. Skipping.")
+                continue
+
             player_position_type = self.position_types[player_position]
 
             if not player_team_abbr:
-                # attempt to retrieve team abbreviation from parent element if img element is missing closing tag
-                player_team_abbr = player.find("td", {"class": "text-left details"}).getText().strip()
+                # attempt to retrieve team abbreviation from parent element if img element is missing or has no alt
+                td_elem = player.find("td", {"class": "text-left details"})
+                player_team_abbr = td_elem.getText().strip() if td_elem else None
 
             # replace player team abbreviation with universal team abbreviation as needed
             if player_team_abbr not in nfl_team_abbreviations:

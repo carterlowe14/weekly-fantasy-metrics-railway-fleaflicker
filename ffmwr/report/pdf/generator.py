@@ -10,6 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 from random import choice
 from typing import Any, Dict, List, Literal, Optional, Tuple
+from dataclasses import is_dataclass, asdict
 from urllib.error import URLError
 
 from PIL import Image, ImageFile
@@ -798,7 +799,7 @@ class PdfGenerator(object):
     ) -> KeepTogether:
         logger.debug(
             f'Creating report section: "{title_text if title_text else metric_type}" with '
-            f"data:\n{json.dumps(data, indent=2)}\n"
+            f"data:\n{json.dumps(data, indent=2, default=lambda o: asdict(o) if is_dataclass(o) else str(o))}\n"
         )
 
         if not sesqui_max_chars_col_ndxs:
@@ -913,6 +914,9 @@ class PdfGenerator(object):
             beef_icon = self.get_img(Path("resources") / "images" / "beef.png", width=0.20 * inch)
             half_beef_icon = self.get_img(Path("resources") / "images" / "beef-half.png", width=0.10 * inch)
 
+            # Convert data to lists to allow mutation and index access
+            data = [list(asdict(item).values()) if is_dataclass(item) else item for item in data]
+
             for team in data:
                 num_cows = int(float(team[3]) // 5)
                 num_beefs = int(float(team[3]) / 0.5) - (num_cows * 10)
@@ -953,6 +957,9 @@ class PdfGenerator(object):
                 for x in range(1, (len(data[0][5:]) % 6) + 2):
                     font_reduction += 1
             table_style.add("FONTSIZE", (0, 0), (-1, -1), (self.font_size - 2) - font_reduction)
+
+            # Convert data to lists to allow index access
+            data = [list(asdict(item).values()) if is_dataclass(item) else item for item in data]
 
             temp_data = []
             row: List[Any]
@@ -1105,8 +1112,13 @@ class PdfGenerator(object):
                     manager_header_ndx = header_ndx
 
         for row in data:
+            if is_dataclass(row):
+                row_values = list(asdict(row).values())
+            else:
+                row_values = row
+
             display_row = []
-            for cell_ndx, cell in enumerate(row):
+            for cell_ndx, cell in enumerate(row_values):
                 if isinstance(cell, str):
                     if cell_ndx not in sesqui_max_chars_col_ndxs:
                         # truncate data cell contents to specified max characters and half of specified max characters

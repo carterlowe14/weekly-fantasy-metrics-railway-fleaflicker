@@ -142,11 +142,16 @@ class FantasyFootballReport(object):
         week_for_report_ordered_team_names = []
         week_for_report_ordered_managers = []
 
-        time_series_points_data = []
-        time_series_efficiency_data = []
-        time_series_luck_data = []
-        time_series_power_rank_data = []
-        time_series_zscore_data = []
+        # keep track of final team order and IDs for chart generation
+        final_team_ids = []
+        week_for_report_ordered_team_names = []
+        week_for_report_ordered_managers = []
+
+        time_series_points_data = defaultdict(list)
+        time_series_efficiency_data = defaultdict(list)
+        time_series_luck_data = defaultdict(list)
+        time_series_power_rank_data = defaultdict(list)
+        time_series_zscore_data = defaultdict(list)
 
         season_total_optimal_points_data = {}
 
@@ -192,25 +197,25 @@ class FantasyFootballReport(object):
 
             top_scorer = {
                 "week": week_counter,
-                "team": report_data.data_for_scores[0][1],
-                "manager": report_data.data_for_scores[0][2],
-                "score": report_data.data_for_scores[0][3],
+                "team": report_data.data_for_scores[0].team_name if hasattr(report_data.data_for_scores[0], 'team_name') else report_data.data_for_scores[0][1],
+                "manager": report_data.data_for_scores[0].manager if hasattr(report_data.data_for_scores[0], 'manager') else report_data.data_for_scores[0][2],
+                "score": report_data.data_for_scores[0].value if hasattr(report_data.data_for_scores[0], 'value') else report_data.data_for_scores[0][3],
             }
             season_weekly_top_scorers.append(top_scorer)
 
             low_scorer = {
                 "week": week_counter,
-                "team": report_data.data_for_scores[-1][1],
-                "manager": report_data.data_for_scores[-1][2],
-                "score": report_data.data_for_scores[-1][3],
+                "team": report_data.data_for_scores[-1].team_name if hasattr(report_data.data_for_scores[-1], 'team_name') else report_data.data_for_scores[-1][1],
+                "manager": report_data.data_for_scores[-1].manager if hasattr(report_data.data_for_scores[-1], 'manager') else report_data.data_for_scores[-1][2],
+                "score": report_data.data_for_scores[-1].value if hasattr(report_data.data_for_scores[-1], 'value') else report_data.data_for_scores[-1][3],
             }
             season_weekly_low_scorers.append(low_scorer)
 
             highest_ce = {
                 "week": week_counter,
-                "team": report_data.data_for_coaching_efficiency[0][1],
-                "manager": report_data.data_for_coaching_efficiency[0][2],
-                "ce": report_data.data_for_coaching_efficiency[0][3],
+                "team": report_data.data_for_coaching_efficiency[0].team_name if hasattr(report_data.data_for_coaching_efficiency[0], 'team_name') else report_data.data_for_coaching_efficiency[0][1],
+                "manager": report_data.data_for_coaching_efficiency[0].manager if hasattr(report_data.data_for_coaching_efficiency[0], 'manager') else report_data.data_for_coaching_efficiency[0][2],
+                "ce": report_data.data_for_coaching_efficiency[0].value if hasattr(report_data.data_for_coaching_efficiency[0], 'value') else report_data.data_for_coaching_efficiency[0][3],
             }
             season_weekly_highest_ce.append(highest_ce)
 
@@ -225,16 +230,36 @@ class FantasyFootballReport(object):
             weekly_z_score_data = []
             weekly_power_rank_data = []
 
-            team: List
             for team in report_data.data_for_teams:
-                ordered_team_names.append(team[1])
-                ordered_team_managers.append(team[2])
-                weekly_points_data.append([week_counter, float(team[3])])
-                weekly_coaching_efficiency_data.append([week_counter, team[4]])
-                weekly_luck_data.append([week_counter, float(team[5])])
-                weekly_optimal_points_data.append([week_counter, team[1], float(team[6])])
-                weekly_z_score_data.append([week_counter, team[7]])
-                weekly_power_rank_data.append([week_counter, team[8]])
+                tid = team.team_id
+                # append data to time series using team_id as key
+                time_series_points_data[tid].append([week_counter, float(team.points)])
+
+                ce = team.coaching_efficiency
+                if ce != "DQ":
+                    time_series_efficiency_data[tid].append([week_counter, ce])
+
+                time_series_luck_data[tid].append([week_counter, float(team.luck)])
+                time_series_zscore_data[tid].append([week_counter, team.z_score])
+                time_series_power_rank_data[tid].append([week_counter, team.power_ranking])
+
+                # Track the final order of teams from the most recent week
+                if week_counter == self.league.week_for_report:
+                    final_team_ids.append(tid)
+                    week_for_report_ordered_team_names.append(team.name)
+                    week_for_report_ordered_managers.append(team.manager)
+
+                # handle season total optimal points
+                for optimal_entry in report_data.data_for_optimal_scores:
+                    name_val = optimal_entry.team_name if hasattr(optimal_entry, 'team_name') else optimal_entry[1]
+                    if name_val == team.name:
+                        val_val = optimal_entry.value if hasattr(optimal_entry, 'value') else optimal_entry[3]
+                        val = float(val_val)
+                        if week_counter == self.league.start_week:
+                            season_total_optimal_points_data[team.name] = val
+                        else:
+                            season_total_optimal_points_data[team.name] = season_total_optimal_points_data.get(team.name, 0.0) + val
+                        break
 
             week_for_report_ordered_team_names = ordered_team_names
             week_for_report_ordered_managers = ordered_team_managers
@@ -299,6 +324,16 @@ class FantasyFootballReport(object):
             time_series_luck_data, "data_for_luck", with_percent=True
         )
 
+        # Convert to lists for mutation
+        report_data.data_for_luck = [
+            [item.rank, item.team_name, item.manager, item.value] if hasattr(item, 'rank') else item
+            for item in report_data.data_for_luck
+        ]
+        report_data.data_for_optimal_scores = [
+            [item.rank, item.team_name, item.manager, item.value] if hasattr(item, 'rank') else item
+            for item in report_data.data_for_optimal_scores
+        ]
+
         # add weekly record to luck data
         for team_luck_data_entry in report_data.data_for_luck:
             for team in self.league.teams_by_week[str(self.league.week_for_report)].values():
@@ -324,14 +359,25 @@ class FantasyFootballReport(object):
             time_series_power_rank_data, "data_for_power_rankings", reverse=False
         )
 
+        # convert time series dictionaries to lists based on final team order
+        points_list = [time_series_points_data[tid] for tid in final_team_ids]
+        efficiency_list = [time_series_efficiency_data[tid] for tid in final_team_ids]
+        luck_list = [time_series_luck_data[tid] for tid in final_team_ids]
+        zscore_list = [time_series_zscore_data[tid] for tid in final_team_ids]
+        power_rank_list = [time_series_power_rank_data[tid] for tid in final_team_ids]
+
+        # Ensure ordered names and managers are correctly populated
+        final_names = [team.name for team in report_data.data_for_teams]
+        final_managers = [team.manager for team in report_data.data_for_teams]
+
         line_chart_data_list = [
-            week_for_report_ordered_team_names,
-            week_for_report_ordered_managers,
-            time_series_points_data,
-            time_series_efficiency_data,
-            time_series_luck_data,
-            time_series_zscore_data,
-            time_series_power_rank_data,
+            final_names,
+            final_managers,
+            points_list,
+            efficiency_list,
+            luck_list,
+            zscore_list,
+            power_rank_list,
         ]
 
         # calculate season average points by position and add them to the report_data

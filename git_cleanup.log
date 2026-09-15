@@ -72,3 +72,8 @@ rm 'resources/images/photo-not-available.png'
 rm 'resources/images/sleeper-fantasy-football-league-id-location.png'
 rm 'resources/images/yahoo-fantasy-football-league-id-location.png'
 rm 'resources/reportlab_template.py'
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'RAILWAY/start-report.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'git_cleanup.log', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'nixpacks.toml', LF will be replaced by CRLF the next time Git touches it
