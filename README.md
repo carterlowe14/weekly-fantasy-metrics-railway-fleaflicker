@@ -1,60 +1,61 @@
-# Railway deployment
+# 🏈 Fantasy Football Metrics Weekly Report (Railway Edition)
 
-This is the compact deployment bundle for the weekly fantasy football report app.
+A high-performance, automated reporting system for Fantasy Football leagues. This repository is a streamlined deployment bundle optimized for Railway.app.
 
-## What it does
+## 🚀 Overview
 
-- reads your Fleaflicker league
-- generates the weekly PDF report
-- posts it to Discord automatically
-- runs as a long-lived trigger service when deployed to Railway
+This application automates the retrieval of league data from platforms (primarily Fleaflicker), calculates advanced metrics and rankings, generates a professionally formatted PDF report, and distributes it via integrations like Discord.
 
-## Required Railway environment variables
+### Key Features
+- **Automated Data Retrieval**: Integrates with multiple fantasy platforms.
+- **Advanced Analytics**: Calculates coaching efficiency, power rankings, and luck metrics.
+- **PDF Generation**: Produces high-quality reports with charts and team pages.
+- **Discord Integration**: Automatically posts the final report to your league's Discord server.
+- **Trigger-Based Execution**: Can be run as a one-shot job or a long-lived service triggered via API.
 
-Set these in the Railway project variables:
+## 🛠️ Deployment on Railway
 
-- `PLATFORM=fleaflicker`
-- `LEAGUE_ID=123456`
-- `DISCORD_WEBHOOK_ID=your-discord-webhook-id`
-- `DISCORD_ROLE_ID=123456789012345678`
-- `DISCORD_CHANNEL_NOTIFY_BOOL=true`
-- `DISCORD_POST_BOOL=true`
-- `DISCORD_POST_OR_FILE=file`
-- `CHECK_FOR_UPDATES=false`
-- `USE_DEFAULT=1`
+### 1. Configuration
+Set the following environment variables in your Railway project settings:
 
-Notes:
-- `SEASON` is not required. The app automatically uses the current calendar year.
-- `DISCORD_ROLE_ID` is the Discord role ID to ping each run.
-- `USE_DEFAULT=1` keeps the job fully unattended.
-- The app automatically fetches the live NFL week from Sleeper instead of relying on a manual week value.
+| Variable | Example Value | Description |
+| :--- | :--- | :--- |
+| `PLATFORM` | `fleaflicker` | The fantasy football platform used by your league. |
+| `LEAGUE_ID` | `123456` | Your league's unique ID. |
+| `DISCORD_WEBHOOK_ID` | `your-webhook-id` | Discord webhook ID for report delivery. |
+| `DISCORD_ROLE_ID` | `123456789` | Role ID to ping when the report is posted. |
+| `DISCORD_POST_BOOL` | `true` | Enable/disable Discord delivery. |
+| `DISCORD_POST_OR_FILE` | `file` | Use `file` to upload PDF or `post` for a link. |
+| `USE_DEFAULT` | `1` | Set to `1` for fully unattended execution. |
+| `CHECK_FOR_UPDATES` | `false` | Disable update checks in production. |
 
-## Railway deploy command
+### 2. Execution Modes
 
+#### A. Long-Lived Trigger Service
+If you want the app to stay online and be triggered by external tools (like CarlBot):
+**Start Command:**
 ```bash
 python main.py --serve
 ```
+- `GET /health`: Health check for Railway.
+- `POST /trigger`: Triggers a report generation run.
 
-This keeps the service running and allows CarlBot or another trigger to call:
-- `GET /health`
-- `POST /trigger`
-
-## Example local shell setup
-
+#### B. One-Shot Scheduled Job
+If you want Railway to run the report on a schedule (e.g., every Tuesday):
+**Start Command:**
 ```bash
-export PLATFORM=fleaflicker
-export LEAGUE_ID=123456
-export DISCORD_WEBHOOK_ID=your-discord-webhook-id
-export DISCORD_ROLE_ID=123456789012345678
-export DISCORD_CHANNEL_NOTIFY_BOOL=true
-export DISCORD_POST_BOOL=true
-export DISCORD_POST_OR_FILE=file
-export CHECK_FOR_UPDATES=false
-export USE_DEFAULT=1
-
-python main.py --serve
+bash RAILWAY/start-report.sh
 ```
 
-## Schedule
+## 📂 Project Structure
 
-The service runs continuously and can be triggered by CarlBot or another external command. The actual report generation uses the default league/env configuration unless a caller sends override values via the `/trigger` endpoint.
+- `ffmwr/`: Core application logic.
+  - `calculate/`: Metric and probability calculations.
+  - `dao/`: Data Access Objects for platform APIs.
+  - `report/`: PDF generation and data assembly.
+  - `utilities/`: App settings and logging.
+- `RAILWAY/`: Deployment scripts and configuration.
+- `resources/`: Fonts, images, and report templates.
+- `main.py`: Application entry point.
+- `requirements.txt`: Python dependencies.
+- `nixpacks.toml`: Build configuration for Railway.

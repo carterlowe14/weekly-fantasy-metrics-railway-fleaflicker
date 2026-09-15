@@ -1,28 +1,52 @@
-# macOS
-**.DS_Store
+# Byte-compiled / optimized / DLLs
+__pycache__/
+*.py[cod]
+*$py.class
 
-# JetBrains
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  //////////////////////////////////////////////////////////////////////////
+#  Crayons are not allowed in this file.
+#  //////////////////////////////////////////////////////////////////////////
+build/
+dist/
+*.spec
+
+# OS junk
+.DS_Store
+Thumbs.db
+.vscode/
 .idea/
 
-# Python
-**__pycache__
-**.pytest_cache
+# Local Environment
+.env
+.venv/
+venv/
+ENV/
+env/
 
-# environment
-*.env*
-.venv*
-.python-venv
-
-# auth secrets
-**private*.json
-
-# output
-**logs/
+# Project specific
+logs/
 output/
-
-# miscellaneous
-resources/files/crime_categories.new.json
-
-# testing
-tests/*.json
-tests/**/*.html
+automation-log.txt
+test-week-tracker.txt
