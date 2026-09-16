@@ -11,6 +11,7 @@ if not sys.warnoptions:
 
 import os
 import colorama
+import secrets
 import time
 from argparse import ArgumentParser, HelpFormatter, Namespace
 from colorama import Fore, Style
@@ -20,7 +21,8 @@ from pathlib import Path
 from tomllib import load as load_toml
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -57,6 +59,21 @@ class TriggerRequest(BaseModel):
 
 app = FastAPI(title="Fantasy Football Metrics Weekly Report Trigger")
 
+TRIGGER_SECRET = os.getenv("TRIGGER_SECRET")
+
+if not TRIGGER_SECRET:
+    logger.warning(
+        'TRIGGER_SECRET is not set. The "/trigger" endpoint is UNAUTHENTICATED and can be '
+        "called by anyone who has the URL. Set TRIGGER_SECRET in the environment to lock it down."
+    )
+
+
+def verify_trigger_secret(x_trigger_secret: Optional[str] = Header(default=None)) -> None:
+    if not TRIGGER_SECRET:
+        return
+    if not x_trigger_secret or not secrets.compare_digest(x_trigger_secret, TRIGGER_SECRET):
+        raise HTTPException(status_code=401, detail="Missing or invalid X-Trigger-Secret header.")
+
 
 @app.get("/health")
 def health() -> dict:
@@ -64,7 +81,12 @@ def health() -> dict:
 
 
 @app.post("/trigger")
-def trigger_report(payload: TriggerRequest | None = None) -> dict:
+def trigger_report(
+    payload: TriggerRequest | None = None,
+    x_trigger_secret: Optional[str] = Header(default=None),
+) -> FileResponse:
+    verify_trigger_secret(x_trigger_secret)
+
     root_directory = Path(__file__).parent
     app_settings: AppSettings = get_app_settings_from_env_file(root_directory / ".env")
 
@@ -88,7 +110,11 @@ def trigger_report(payload: TriggerRequest | None = None) -> dict:
     )
 
     result = run_report(args, app_settings, root_directory)
-    return {"status": "ok", "report_path": str(result)}
+    return FileResponse(
+        path=result,
+        media_type="application/pdf",
+        filename=Path(result).name,
+    )
 
 
 def build_default_args(app_settings: AppSettings) -> Namespace:
