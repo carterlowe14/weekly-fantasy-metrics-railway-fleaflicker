@@ -261,36 +261,12 @@ class FantasyFootballReport(object):
                             season_total_optimal_points_data[team.name] = season_total_optimal_points_data.get(team.name, 0.0) + val
                         break
 
-            week_for_report_ordered_team_names = ordered_team_names
-            week_for_report_ordered_managers = ordered_team_managers
+            # NOTE: week_for_report_ordered_team_names / managers are populated
+            # only on the final week inside the team loop above. Do NOT overwrite
+            # them with the unused ordered_team_names list.
 
-            if week_counter == self.league.start_week:
-                for team_points in weekly_points_data:
-                    time_series_points_data.append([team_points])
-                for team_efficiency in weekly_coaching_efficiency_data:
-                    time_series_efficiency_data.append([team_efficiency])
-                for team_luck in weekly_luck_data:
-                    time_series_luck_data.append([team_luck])
-                for team_optimal_points in weekly_optimal_points_data:
-                    season_total_optimal_points_data[team_optimal_points[1]] = team_optimal_points[2]
-                for team_zscore in weekly_z_score_data:
-                    time_series_zscore_data.append([team_zscore])
-                for team_power_rank in weekly_power_rank_data:
-                    time_series_power_rank_data.append([team_power_rank])
-            else:
-                for index, team_points in enumerate(weekly_points_data):
-                    time_series_points_data[index].append(team_points)
-                for index, team_efficiency in enumerate(weekly_coaching_efficiency_data):
-                    if team_efficiency[1] != "DQ":
-                        time_series_efficiency_data[index].append(team_efficiency)
-                for index, team_luck in enumerate(weekly_luck_data):
-                    time_series_luck_data[index].append(team_luck)
-                for index, team_optimal_points in enumerate(weekly_optimal_points_data):
-                    season_total_optimal_points_data[team_optimal_points[1]] += team_optimal_points[2]
-                for index, team_zscore in enumerate(weekly_z_score_data):
-                    time_series_zscore_data[index].append(team_zscore)
-                for index, team_power_rank in enumerate(weekly_power_rank_data):
-                    time_series_power_rank_data[index].append(team_power_rank)
+            # Legacy index-based time-series appends removed – data is collected
+            # via team_id keys into the defaultdicts above.
 
             week_counter += 1
 
@@ -300,28 +276,32 @@ class FantasyFootballReport(object):
         report_data.data_for_season_weekly_highest_ce = season_weekly_highest_ce
 
         # calculate season average metrics and then add columns for them to their respective metric table data
+        # Convert time-series dicts → ordered lists matching final team order
+        # so SeasonAverageCalculator receives List[List[List]] as expected.
+        ordered_points_series = [time_series_points_data[tid] for tid in final_team_ids]
+        ordered_efficiency_series = [time_series_efficiency_data[tid] for tid in final_team_ids]
+        ordered_luck_series = [time_series_luck_data[tid] for tid in final_team_ids]
+        ordered_power_rank_series = [time_series_power_rank_data[tid] for tid in final_team_ids]
+
         season_average_calculator = SeasonAverageCalculator(
             week_for_report_ordered_team_names, report_data, self.break_ties
         )
 
         report_data.data_for_scores = season_average_calculator.get_average(
-            time_series_points_data,
+            ordered_points_series,
             "data_for_scores",
             first_ties=report_data.num_first_place_for_score_before_resolution > 1,
         )
 
         report_data.data_for_coaching_efficiency = season_average_calculator.get_average(
-            time_series_efficiency_data,
+            ordered_efficiency_series,
             "data_for_coaching_efficiency",
             with_percent=True,
-            # TODO: find better pattern for player points retrieval instead of passing around a class method object
-            # first_ties=((report_data.num_first_place_for_coaching_efficiency_before_resolution > 1) and
-            #             (report_data.league.player_data_by_week_function is not None))
             first_ties=report_data.num_first_place_for_coaching_efficiency_before_resolution > 1,
         )
 
         report_data.data_for_luck = season_average_calculator.get_average(
-            time_series_luck_data, "data_for_luck", with_percent=True
+            ordered_luck_series, "data_for_luck", with_percent=True
         )
 
         # Convert to lists for mutation
@@ -356,7 +336,7 @@ class FantasyFootballReport(object):
                     team_optimal_points_data_entry.append(total_optimal_points_ranked)
 
         report_data.data_for_power_rankings = season_average_calculator.get_average(
-            time_series_power_rank_data, "data_for_power_rankings", reverse=False
+            ordered_power_rank_series, "data_for_power_rankings", reverse=False
         )
 
         # convert time series dictionaries to lists based on final team order

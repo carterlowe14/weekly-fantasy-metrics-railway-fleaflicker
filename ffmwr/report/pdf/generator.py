@@ -873,16 +873,28 @@ class PdfGenerator(object):
             if self.break_ties and self.report_data.ties_for_scores > 0:
                 self.scores_headers[0].append("Bench Points")
             else:
-                for index, team in enumerate(self.data_for_scores):
-                    self.data_for_scores[index] = team[:-1]
+                # Drop trailing column when not breaking ties (safe for list or dataclass)
+                normalized = []
+                for team in self.data_for_scores:
+                    if isinstance(team, (list, tuple)):
+                        normalized.append(list(team[:-1]) if len(team) > 4 else list(team))
+                    else:
+                        # dataclass / object – leave as-is; create_data_table handles it
+                        normalized.append(team)
+                self.data_for_scores = normalized
+                data = self.data_for_scores
 
         if metric_type == "coaching_efficiency":
             if self.break_ties and tied_metric:
                 self.efficiency_headers[0][3] = "CE (%)"
                 self.efficiency_headers[0].extend(["# > Avg.", "Sum % > Avg."])
             else:
-                for index, team in enumerate(self.data_for_coaching_efficiency):
-                    self.data_for_coaching_efficiency[index] = team
+                # Ensure list form for any downstream mutation
+                self.data_for_coaching_efficiency = [
+                    list(team) if isinstance(team, (list, tuple)) else team
+                    for team in self.data_for_coaching_efficiency
+                ]
+                data = self.data_for_coaching_efficiency
 
         if metric_type == "top_scorers":
             temp_data = []

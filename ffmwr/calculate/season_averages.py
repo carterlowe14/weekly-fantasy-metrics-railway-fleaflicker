@@ -1,6 +1,7 @@
 __author__ = "Wren J. R. (uberfastman)"
 __email__ = "uberfastman@uberfastman.dev"
 
+from dataclasses import asdict, is_dataclass
 from typing import Any, List
 
 import numpy as np
@@ -10,6 +11,33 @@ from ffmwr.report.data import ReportData
 from ffmwr.utilities.logger import get_logger
 
 logger = get_logger(__name__, propagate=False)
+
+
+def _row_to_list(row: Any) -> List[Any]:
+    """Normalize a metric row (dataclass or list) into a mutable list.
+
+    Supported shapes:
+    - TeamMetricResult-style dataclass: rank, team_name, manager, value
+      → [rank, team_name, manager, value]
+    - Power-ranking style list: [rank, team_name, manager, ...]
+    - Already a plain list
+    """
+    if is_dataclass(row) and not isinstance(row, type):
+        d = asdict(row)
+        if "rank" in d and "team_name" in d and "manager" in d:
+            value = d.get("value", d.get("points", d.get("tabbu", d.get("fines_total"))))
+            base = [d["rank"], d["team_name"], d["manager"], value]
+            for k, v in d.items():
+                if k not in ("rank", "team_name", "manager", "value", "points", "tabbu", "fines_total"):
+                    base.append(v)
+            return base
+        return list(d.values())
+
+    if isinstance(row, (list, tuple)):
+        return list(row)
+
+    logger.warning("Unexpected row type in season average calculator: %s", type(row))
+    return [row]
 
 
 class SeasonAverageCalculator(object):
@@ -28,58 +56,85 @@ class SeasonAverageCalculator(object):
         first_ties: bool = False,
         reverse: bool = True,
     ) -> List[List[Any]]:
-        logger.debug(f'Calculating season average from "{key}".')
+        """
+        Calculate season averages and attach them to each team's ranking row.
 
-        season_average_list = []
+        Always returns a list-of-lists so downstream PDF generation and
+        post-processing (luck record, optimal totals, etc.) can mutate rows
+        safely. Handles both the newer TeamMetricResult dataclasses and the
+        older pure-list format.
+        """
+        logger.debug('Calculating season average from "%s".', key)
+
+        # 1. Build per-team season averages from the time-series data
+        season_average_list: List[List[Any]] = []
         team_index = 0
         for team in data:
-            # FIX: Add bounds check for team_names
             if team_index >= len(self.team_names):
                 logger.warning(
-                    f"Team index {team_index} exceeds available team names ({len(self.team_names)}). "
-                    f"Skipping this team (likely eliminated from playoffs)."
+                    "Team index %s exceeds available team names (%s). "
+                    "Skipping this team (likely eliminated from playoffs).",
+                    team_index,
+                    len(self.team_names),
                 )
-                team_index += 1  # <-- ADD THIS LINE HERE
+                team_index += 1
                 continue
-            
+
             team_name = self.team_names[team_index]
-            valid_values = [value[1] for value in team if (value[1] is not None and value[1] != "DQ")]
-            average = np.mean(valid_values)
-            season_average_value = f"{average:.2f}"
+            valid_values = [
+                value[1]
+                for value in team
+                if (value[1] is not None and value[1] != "DQ")
+            ]
+
+            if valid_values:
+                average = float(np.mean(valid_values))
+                season_average_value = f"{average:.2f}"
+            else:
+                # No valid weekly values (e.g. all DQ) – still emit a row
+                season_average_value = "0.00"
+
             season_average_list.append([team_name, season_average_value])
             team_index += 1
-        ordered_average_values = sorted(season_average_list, key=lambda x: float(x[1]), reverse=reverse)
-        index = 0
-        for team in ordered_average_values:
-            ordered_average_values[ordered_average_values.index(team)] = [index, team[0], team[1]]
-            index += 1
+
+        # 2. Order averages and resolve ties
+        ordered_average_values = sorted(
+            season_average_list, key=lambda x: float(x[1]), reverse=reverse
+        )
+        for index, team in enumerate(ordered_average_values):
+            ordered_average_values[index] = [index, team[0], team[1]]
 
         ordered_average_values = CalculateMetrics(None, None, None).resolve_season_average_ties(
             ordered_average_values, with_percent
         )
 
-        ordered_season_average_list = []
-        for ordered_team in getattr(self.report_data, key):
+        # 3. Merge season-average column onto the current week's ranking rows.
+        #    Normalize every row to a list first so indexing/mutation is safe.
+        current_rows = [_row_to_list(row) for row in getattr(self.report_data, key)]
+        ordered_season_average_list: List[List[Any]] = []
+
+        for ordered_team in current_rows:
+            # ordered_team is now always [rank, team_name, manager, value, ...]
+            team_name = ordered_team[1] if len(ordered_team) > 1 else None
+
+            matched = False
             for team in ordered_average_values:
-                if ordered_team[1] == team[1]:
+                if team_name == team[1]:
+                    # Format the current-week value if needed
                     if with_percent:
-                        ordered_team[3] = (
-                            f"{float(str(ordered_team[3]).replace('%', '')):.2f}%" if ordered_team[3] != "DQ" else "DQ"
-                        )
+                        raw = ordered_team[3] if len(ordered_team) > 3 else None
+                        if raw is not None and raw != "DQ":
+                            ordered_team[3] = f"{float(str(raw).replace('%', '')):.2f}%"
                         value = str(team[2])
                     elif key == "data_for_scores":
-                        ordered_team[3] = f"{float(str(ordered_team[3])):.2f}"
+                        if len(ordered_team) > 3 and ordered_team[3] is not None:
+                            ordered_team[3] = f"{float(str(ordered_team[3])):.2f}"
                         value = str(team[2])
                     else:
-                        value = f"{str(team[2])}"
+                        value = str(team[2])
 
+                    # Attach the season-average
                     if key == "data_for_scores":
-                        ordered_team.insert(-1, value)
+                        ordered_team.insert(-1 if len(ordered_team) > 4 else len(ordered_team), value)
                     elif key == "data_for_coaching_efficiency" and self.break_ties and first_ties:
-                        ordered_team.insert(-2, value)
-                    else:
-                        ordered_team.append(value)
-
-                    ordered_season_average_list.append(ordered_team)
-
-        return ordered_season_average_list
+                        ordered_team.insert(-2 if len(ordered_team) > 4 else len(ordered_team), value)
