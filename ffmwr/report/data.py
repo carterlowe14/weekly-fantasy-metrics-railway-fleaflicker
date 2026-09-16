@@ -247,25 +247,22 @@ class ReportData(object):
 
         # get number of scores ties and ties for first
         self.ties_for_scores = metrics_calculator.get_ties_count(self.data_for_scores, "score", self.break_ties)
-        self.num_first_place_for_score_before_resolution = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x.value if hasattr(x, 'value') else x[3])][0]
-        )
+        _score_groups = [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x.value if hasattr(x, 'value') else x[3])]
+        self.num_first_place_for_score_before_resolution = len(_score_groups[0]) if _score_groups else 0
 
         # reorder score data based on bench points if there are ties and break_ties = True
         if self.ties_for_scores > 0:
             self.data_for_scores = metrics_calculator.resolve_score_ties(self.data_for_scores, self.break_ties)
             metrics_calculator.get_ties_count(self.data_for_scores, "score", self.break_ties)
-        self.num_first_place_for_score = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x[3] if isinstance(x, list) else x.value)][0]
-        )
+        _score_groups_after = [list(group) for key, group in itertools.groupby(self.data_for_scores, lambda x: x[3] if isinstance(x, list) else x.value)]
+        self.num_first_place_for_score = len(_score_groups_after[0]) if _score_groups_after else 0
 
         # get number of coaching efficiency ties and ties for first
         self.ties_for_coaching_efficiency = metrics_calculator.get_ties_count(
             self.data_for_coaching_efficiency, "coaching_efficiency", self.break_ties
         )
-        self.num_first_place_for_coaching_efficiency_before_resolution = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x.rank if hasattr(x, 'rank') else x[0])][0]
-        )
+        _ce_groups = [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x.rank if hasattr(x, 'rank') else x[0])]
+        self.num_first_place_for_coaching_efficiency_before_resolution = len(_ce_groups[0]) if _ce_groups else 0
 
         if self.ties_for_coaching_efficiency > 0:
             self.data_for_coaching_efficiency = metrics_calculator.resolve_coaching_efficiency_ties(
@@ -277,15 +274,13 @@ class ReportData(object):
                 int(week_for_report),
                 self.break_ties,
             )
-        self.num_first_place_for_coaching_efficiency = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x[0] if isinstance(x, list) else x.rank)][0]
-        )
+        _ce_groups_after = [list(group) for key, group in itertools.groupby(self.data_for_coaching_efficiency, lambda x: x[0] if isinstance(x, list) else x.rank)]
+        self.num_first_place_for_coaching_efficiency = len(_ce_groups_after[0]) if _ce_groups_after else 0
 
         # get number of luck ties and ties for first
         self.ties_for_luck = metrics_calculator.get_ties_count(self.data_for_luck, "luck", self.break_ties)
-        self.num_first_place_for_luck = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_luck, lambda x: x.value if hasattr(x, 'value') else x[3])][0]
-        )
+        _luck_groups = [list(group) for key, group in itertools.groupby(self.data_for_luck, lambda x: x.value if hasattr(x, 'value') else x[3])]
+        self.num_first_place_for_luck = len(_luck_groups[0]) if _luck_groups else 0
 
         # get number of bad boy rankings ties and ties for first
         self.ties_for_bad_boy_rankings = metrics_calculator.get_ties_count(
@@ -352,9 +347,8 @@ class ReportData(object):
         self.ties_for_power_rankings = metrics_calculator.get_ties_count(
             self.data_for_power_rankings, "power_ranking", self.break_ties
         )
-        self.ties_for_first_for_power_rankings = len(
-            [list(group) for key, group in itertools.groupby(self.data_for_power_rankings, lambda x: x[0])][0]
-        )
+        _pr_groups = [list(group) for key, group in itertools.groupby(self.data_for_power_rankings, lambda x: x[0])]
+        self.ties_for_first_for_power_rankings = len(_pr_groups[0]) if _pr_groups else 0
 
         # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
         # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ LOGGER OUTPUT ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~

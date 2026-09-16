@@ -639,17 +639,21 @@ class CalculateMetrics(object):
                     players = []
                     for team_result in teams_results.values():
                         if team_result.name == ce_result[1]:
-                            players = teams_results.get(team_result.team_id).roster
+                            team_obj = teams_results.get(team_result.team_id)
+                            # roster can be None on some platforms / edge cases
+                            players = (team_obj.roster if team_obj is not None else None) or []
+                            break
 
                     num_players_exceeded_season_avg_points = 0
                     total_percentage_points_players_exceeded_season_avg_points = 0
                     player: BasePlayer
+                    bench_pos = bench_positions or []
                     for player in players:
-                        if player.selected_position not in bench_positions:
+                        if player.selected_position not in bench_pos:
                             week_counter = 1
                             while week_counter <= int(week):
-                                players_by_week = league.players_by_week[str(week_counter)]
-                                if str(player.player_id) in players_by_week.keys():
+                                players_by_week = league.players_by_week.get(str(week_counter)) or {}
+                                if str(player.player_id) in players_by_week:
                                     season_average_points_by_player_dict[player.player_id].append(
                                         players_by_week[str(player.player_id)].points
                                     )
