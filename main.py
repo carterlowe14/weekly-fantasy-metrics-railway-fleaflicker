@@ -41,22 +41,6 @@ colorama.init()
 logger = get_logger()
 
 
-class TriggerRequest(BaseModel):
-    use_default: bool = True
-    fantasy_platform: Optional[str] = None
-    league_id: Optional[str] = None
-    year: Optional[int] = None
-    start_week: Optional[int] = None
-    week: Optional[int] = None
-    save_data: bool = False
-    refresh_feature_web_data: bool = False
-    playoff_prob_sims: Optional[int] = None
-    break_ties: bool = False
-    disqualify_coaching_efficiency: bool = False
-    offline: bool = False
-    test: bool = False
-
-
 app = FastAPI(title="Fantasy Football Metrics Weekly Report Trigger")
 
 TRIGGER_SECRET = os.getenv("TRIGGER_SECRET")
@@ -81,35 +65,25 @@ def health() -> dict:
 
 
 @app.post("/trigger")
-def trigger_report(
-    payload: TriggerRequest | None = None,
-    x_trigger_secret: Optional[str] = Header(default=None),
-) -> FileResponse:
+def trigger_report(x_trigger_secret: Optional[str] = Header(default=None)) -> FileResponse:
+    """Always runs with the .env defaults - no per-request configuration accepted."""
     verify_trigger_secret(x_trigger_secret)
 
     root_directory = Path(__file__).parent
     app_settings: AppSettings = get_app_settings_from_env_file(root_directory / ".env")
 
-    request_values = payload or TriggerRequest()
-    args = Namespace(
-        fantasy_platform=request_values.fantasy_platform,
-        league_id=request_values.league_id,
-        yahoo_game_id=None,
-        year=request_values.year,
-        start_week=request_values.start_week,
-        week=request_values.week,
-        use_default=request_values.use_default,
-        save_data=request_values.save_data,
-        refresh_feature_web_data=request_values.refresh_feature_web_data,
-        playoff_prob_sims=request_values.playoff_prob_sims,
-        break_ties=request_values.break_ties,
-        disqualify_coaching_efficiency=request_values.disqualify_coaching_efficiency,
-        offline=request_values.offline,
-        skip_uploads=False,
-        test=request_values.test,
-    )
+    args = build_default_args(app_settings)
+    args.skip_uploads = False
 
-    result = run_report(args, app_settings, root_directory)
+    try:
+        result = run_report(args, app_settings, root_directory)
+    except RuntimeError as e:
+        logger.error(f"Report generation failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error during report generation.")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
     return FileResponse(
         path=result,
         media_type="application/pdf",
@@ -216,7 +190,7 @@ def run_report(args: Namespace, app_settings: AppSettings, root_directory: Path)
                     f'The ".env" file contains unsupported {name} setting: '
                     f'{name.upper()}_POST_OR_FILE={post_or_file}. Please choose "post" or "file" and try again.'
                 )
-                raise SystemExit(1)
+                raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
 
             # Validate response based on platform
             is_success = False
@@ -264,7 +238,7 @@ def select_league(
         if not use_default:
             if not sys.stdin.isatty():
                 logger.error("League ID is missing and environment is non-interactive. Please provide league_id in .env or via API.")
-                raise SystemExit(1)
+                raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
             selection = input(f"{Fore.YELLOW}Generate report for default league? ({Fore.GREEN}y{Fore.YELLOW}/{Fore.RED}n{Fore.YELLOW}) -> {Style.RESET_ALL}").lower()
         else:
             logger.info('Use-default is set to "true". Automatically running the report for the default league.')
@@ -291,7 +265,7 @@ def select_league(
     elif selection == "n":
         if not sys.stdin.isatty():
             logger.error("Environment is non-interactive. Cannot prompt for league ID.")
-            raise SystemExit(1)
+            raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
         league_id = input(f"{Fore.YELLOW}What is the league ID of the league for which you want to generate a report? -> {Style.RESET_ALL}")
         return FantasyFootballReport(
             settings=settings,
@@ -335,21 +309,21 @@ def select_platform(settings: AppSettings, use_default: bool = False) -> str:
     else:
         if not sys.stdin.isatty():
             logger.error("Environment is non-interactive. Cannot prompt for platform.")
-            raise SystemExit(1)
+            raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
         selection = input(f"{Fore.YELLOW}Generate report for default platform? ({Fore.GREEN}y{Fore.YELLOW}/{Fore.RED}n{Fore.YELLOW}) -> {Style.RESET_ALL}").lower()
 
     if selection == "y":
         if settings.platform in settings.supported_platforms_list:
             return settings.platform
-        raise SystemExit(1)
+        raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
     elif selection == "n":
         if not sys.stdin.isatty():
             logger.error("Environment is non-interactive. Cannot prompt for platform.")
-            raise SystemExit(1)
+            raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
         chosen_platform = input(f"{Fore.YELLOW}For which platform would you like to generate a report ? ({Fore.GREEN}{f'{Fore.YELLOW}/{Fore.GREEN}'.join(settings.supported_platforms_list)}{Fore.YELLOW}) -> {Style.RESET_ALL}").lower()
         if chosen_platform in settings.supported_platforms_list:
             return chosen_platform
-        raise SystemExit(1)
+        raise RuntimeError("Report generation failed due to invalid configuration or missing input; see server logs for details.")
     return settings.platform
 
 
