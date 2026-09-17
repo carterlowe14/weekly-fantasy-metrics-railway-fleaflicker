@@ -85,7 +85,7 @@ class DiscordIntegration(BaseIntegration):
         self.client.set_content(message)
         self.client.add_file(file_path.read_bytes(), file_path.name)
 
-        return _discord_response_payload(self.client.execute(wait=True))
+        return _discord_response_payload(self.client.execute())
 
 
 if __name__ == "__main__":
