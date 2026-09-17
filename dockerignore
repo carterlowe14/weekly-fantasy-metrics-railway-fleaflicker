@@ -1,0 +1,14 @@
+.venv/
+venv/
+.git/
+.claude/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.env
+*.pdf
+logs/
+.idea/
+.vscode/
+git_cleanup.log
