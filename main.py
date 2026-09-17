@@ -449,19 +449,10 @@ def _prompt_for_league_id() -> str:
 # Server & CLI
 # ---------------------------------------------------------------------------
 def serve_trigger_server(app_settings: AppSettings) -> None:
-    # Always bind all interfaces. Railway injects PORT; default 8080 locally.
-    port: int = int(os.environ.get("PORT", "8080"))
-
-    logger.info("Starting Fantasy Football Metrics trigger server on 0.0.0.0:%s", port)
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        log_level="info",
-        access_log=True,
-        log_config=None,
-    )
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8080"))
+    logger.info("Starting Fantasy Football Metrics trigger server on %s:%s", host, port)
+    uvicorn.run(app, host=host, port=port)
 
 
 def configure_parser(app_settings: AppSettings) -> ArgumentParser:
