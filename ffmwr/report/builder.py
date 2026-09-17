@@ -139,9 +139,6 @@ class FantasyFootballReport(object):
 
         report_data = None
 
-        week_for_report_ordered_team_names = []
-        week_for_report_ordered_managers = []
-
         # keep track of final team order and IDs for chart generation
         final_team_ids = []
         week_for_report_ordered_team_names = []
@@ -220,15 +217,6 @@ class FantasyFootballReport(object):
             season_weekly_highest_ce.append(highest_ce)
 
             season_weekly_teams_results.append(report_data.teams_results)
-
-            ordered_team_names = []
-            ordered_team_managers = []
-            weekly_points_data = []
-            weekly_coaching_efficiency_data = []
-            weekly_luck_data = []
-            weekly_optimal_points_data = []
-            weekly_z_score_data = []
-            weekly_power_rank_data = []
 
             for team in report_data.data_for_teams:
                 tid = team.team_id

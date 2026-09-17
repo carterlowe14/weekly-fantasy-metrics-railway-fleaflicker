@@ -322,7 +322,14 @@ def _is_successful_response(platform: str, response) -> bool:
             return response.get("meta", {}).get("code") in (201, 202)
         return False
     if platform == "discord":
-        return isinstance(response, dict) and response.get("type") == 0
+        if not isinstance(response, dict):
+            return False
+        if response.get("ok") is True:
+            return True
+        status_code = response.get("status_code")
+        if isinstance(status_code, int) and status_code < 400:
+            return True
+        return "id" in response or response.get("type") == 0
     return False
 
 
@@ -417,11 +424,18 @@ def select_platform(settings: AppSettings, use_default: bool = False) -> str:
     raise RuntimeError("Invalid platform selection. Please answer 'y' or 'n'.")
 
 
-def select_week(settings: AppSettings, use_default: bool = False) -> int:
-    fallback = settings.current_nfl_week or 1
+def select_week(settings: AppSettings, use_default: bool = False) -> Optional[int]:
+    if settings.week_for_report not in (None, "default"):
+        try:
+            week = int(settings.week_for_report)
+            logger.info("Using configured week for report: %s", week)
+            return week
+        except (TypeError, ValueError):
+            logger.warning("Invalid WEEK_FOR_REPORT=%s; falling back to last completed week.", settings.week_for_report)
+
     if use_default:
-        logger.info("Using default NFL week: %s", fallback)
-    return fallback
+        logger.info("Using last completed NFL week (WEEK_FOR_REPORT=default).")
+    return None
 
 
 def _prompt_for_league_id() -> str:

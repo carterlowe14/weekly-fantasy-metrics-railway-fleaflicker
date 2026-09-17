@@ -1,16 +1,32 @@
 import json
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 from colorama import Fore, Style
 from discord_webhook import DiscordWebhook
-from requests import Response
 
 from ffmwr.integrations.base.integration import BaseIntegration
 from ffmwr.utilities.logger import get_logger
 from ffmwr.utilities.settings import AppSettings, get_app_settings_from_env_file
 
 logger = get_logger(__name__, propagate=False)
+
+
+def _discord_response_payload(response) -> Dict[str, Any]:
+    """Discord returns 204 No Content unless wait=True; never assume the body is JSON."""
+    status_code = getattr(response, "status_code", None)
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if isinstance(payload, dict):
+        payload.setdefault("status_code", status_code)
+        if status_code is not None and status_code < 400:
+            payload.setdefault("ok", True)
+        return payload
+
+    return {"ok": status_code is not None and status_code < 400, "status_code": status_code, "body": payload}
 
 
 class DiscordIntegration(BaseIntegration):
@@ -36,7 +52,14 @@ class DiscordIntegration(BaseIntegration):
 
         self.webhook_url = f"{self.base_url}/{self.settings.integration_settings.discord_webhook_id}"
 
-        self.client = DiscordWebhook(url=self.webhook_url, allowed_mentions={"parse": ["everyone"]})
+        allowed_mentions = {"parse": ["everyone"]}
+        if self.settings.integration_settings.discord_role_id:
+            allowed_mentions["roles"] = [str(self.settings.integration_settings.discord_role_id)]
+
+        self.client = DiscordWebhook(
+            url=self.webhook_url,
+            allowed_mentions=allowed_mentions,
+        )
 
     def post_message(self, message: str) -> Dict:
         logger.debug(f"Posting message to Discord: \n{message}")
@@ -47,9 +70,9 @@ class DiscordIntegration(BaseIntegration):
 
         self.client.set_content(message)
 
-        return self.client.execute().json()
+        return _discord_response_payload(self.client.execute(wait=True))
 
-    def upload_file(self, file_path: Path) -> Response:
+    def upload_file(self, file_path: Path) -> Dict:
         logger.debug(f"Uploading file to Discord: \n{file_path}")
 
         message = self._upload_success_message(file_path.name)
@@ -58,15 +81,10 @@ class DiscordIntegration(BaseIntegration):
         if mention:
             message = f"{mention}\n{message}"
 
-        # discord_embed = DiscordEmbed()
-        # discord_embed.set_title(file_path.name)
-        # discord_embed.set_description(message)
-        # self.client.add_embed(discord_embed)
-
         self.client.set_content(message)
         self.client.add_file(file_path.read_bytes(), file_path.name)
 
-        return self.client.execute().json()
+        return _discord_response_payload(self.client.execute(wait=True))
 
 
 if __name__ == "__main__":

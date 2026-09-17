@@ -112,14 +112,17 @@ def user_week_input_validation(settings: AppSettings, week: int, retrieved_curre
 
 
 def get_current_nfl_week(settings: AppSettings, offline: bool) -> int:
-    api_url = "https://api.sleeper.app/v1/state/nfl"
+    if settings.current_nfl_week:
+        logger.info("Using CURRENT_NFL_WEEK from settings: %s", settings.current_nfl_week)
+        return int(settings.current_nfl_week)
 
     if offline:
         raise RuntimeError(
             "Offline mode is not supported for current NFL week detection. "
-            "The app must reach the live Sleeper API to determine the week."
+            "Set CURRENT_NFL_WEEK or allow the app to reach the live Sleeper API."
         )
 
+    api_url = "https://api.sleeper.app/v1/state/nfl"
     logger.debug("Retrieving current NFL week from the Sleeper API.")
 
     try:
@@ -132,7 +135,7 @@ def get_current_nfl_week(settings: AppSettings, offline: bool) -> int:
         logger.error("Unable to retrieve current NFL week from the Sleeper API.")
         raise RuntimeError(
             "Current NFL week could not be determined from Sleeper. "
-            "Ensure the Railway app can reach the public Sleeper API."
+            "Set CURRENT_NFL_WEEK in the environment or ensure the app can reach the public Sleeper API."
         ) from e
 
 
@@ -612,24 +615,33 @@ def git_ls_remote(url: str):
 
 
 def check_github_for_updates(use_default: bool = False) -> bool:
+    if use_default or os.getenv("USE_DEFAULT") == "1" or not (sys.stdin and sys.stdin.isatty()):
+        logger.info("Skipping GitHub update check in unattended mode.")
+        return False
+
     if not active_network_connection():
         logger.info(
             "No active network connection found. Unable to check for updates for the Fantasy Football Metrics Weekly "
             "Report app."
         )
         return False
-    else:
-        logger.debug("Checking upstream remote for app updates.")
-        project_repo = Repo(Path(__file__).parent.parent.parent)
 
-        # noinspection PyUnresolvedReferences
+    logger.debug("Checking upstream remote for app updates.")
+    repo_path = Path(__file__).parent.parent.parent
+    try:
+        project_repo = Repo(repo_path)
         origin_url = str(project_repo.remotes.origin.url)
-        origin_url_with_https = None
-        # temporarily convert git remote URL from SSH to HTTPS if necessary
-        if "https" not in origin_url:
-            origin_url_with_https = f"https://github.com/{origin_url.split(':')[1]}"
-            project_repo.remote(name="origin").set_url(origin_url_with_https)
+    except Exception as exc:
+        logger.warning("Skipping GitHub update check: %s", exc)
+        return False
 
+    origin_url_with_https = None
+    # temporarily convert git remote URL from SSH to HTTPS if necessary
+    if "https" not in origin_url:
+        origin_url_with_https = f"https://github.com/{origin_url.split(':')[1]}"
+        project_repo.remote(name="origin").set_url(origin_url_with_https)
+
+    try:
         project_repo.remote(name="origin").update()
         project_repo.remote(name="origin").fetch(prune=True)
 
@@ -642,10 +654,13 @@ def check_github_for_updates(use_default: bool = False) -> bool:
         last_local_version = None
         tag_ndx = 0
         while not last_local_version:
+            if tag_ndx >= len(version_tags):
+                break
             next_tag: TagReference = version_tags[tag_ndx]
             for commit in project_repo.iter_commits():
                 if next_tag.commit == commit:
                     last_local_version = next_tag
+                    break
             if not last_local_version:
                 tag_ndx += 1
 
@@ -662,33 +677,29 @@ def check_github_for_updates(use_default: bool = False) -> bool:
             key=lambda x: list(map(int, x[0].split("."))),
             reverse=True,
         )
-        last_remote_version = remote_tags[0][1]
+        last_remote_version = remote_tags[0][1] if remote_tags else None
 
         target_branch = "main"
         active_branch = project_repo.active_branch.name
         if active_branch != target_branch:
-            if not use_default:
-                switch_branch = input(
-                    f"{Fore.YELLOW}You are {Fore.RED}not {Fore.YELLOW}on the deployment branch "
-                    f'({Fore.GREEN}"{target_branch}"{Fore.YELLOW}) of the Fantasy Football Metrics Weekly Report '
-                    f'app.\nDo you want to switch to the {Fore.GREEN}"{target_branch}"{Fore.YELLOW} branch? '
-                    f"({Fore.GREEN}y{Fore.YELLOW}/{Fore.RED}n{Fore.YELLOW}) -> {Style.RESET_ALL}"
-                )
+            switch_branch = input(
+                f"{Fore.YELLOW}You are {Fore.RED}not {Fore.YELLOW}on the deployment branch "
+                f'({Fore.GREEN}"{target_branch}"{Fore.YELLOW}) of the Fantasy Football Metrics Weekly Report '
+                f'app.\nDo you want to switch to the {Fore.GREEN}"{target_branch}"{Fore.YELLOW} branch? '
+                f"({Fore.GREEN}y{Fore.YELLOW}/{Fore.RED}n{Fore.YELLOW}) -> {Style.RESET_ALL}"
+            )
 
-                if switch_branch == "y":
-                    project_repo.git.checkout(target_branch)
-                elif switch_branch == "n":
-                    logger.warning(
-                        f'Running the app on a branch that is not "{target_branch}" could result in unexpected and '
-                        f"potentially incorrect output."
-                    )
-                else:
-                    logger.warning('You must select either "y" or "n".')
-                    project_repo.remote(name="origin").set_url(origin_url)
-                    return check_github_for_updates(use_default)
-            else:
-                logger.info('Use-default is set to "true". Automatically switching to deployment branch "main".')
+            if switch_branch == "y":
                 project_repo.git.checkout(target_branch)
+            elif switch_branch == "n":
+                logger.warning(
+                    f'Running the app on a branch that is not "{target_branch}" could result in unexpected and '
+                    f"potentially incorrect output."
+                )
+            else:
+                logger.warning('You must select either "y" or "n".')
+                project_repo.remote(name="origin").set_url(origin_url)
+                return check_github_for_updates(use_default)
 
         num_commits_behind = len(list(project_repo.iter_commits(f"{target_branch}..origin/{target_branch}")))
 
@@ -737,17 +748,24 @@ def check_github_for_updates(use_default: bool = False) -> bool:
                 logger.warning(not_up_to_date_status_message)
                 project_repo.remote(name="origin").set_url(origin_url)
                 return False
-            else:
-                logger.warning('Please only select "y" or "n".')
-                time.sleep(0.25)
-                return check_github_for_updates()
-        else:
-            logger.info(
-                f"The Fantasy Football Metrics Weekly Report app is {Fore.GREEN}up to date{Fore.WHITE} and running "
-                f"{Fore.GREEN}{last_local_version}{Fore.WHITE}."
-            )
+
+            logger.warning('Please only select "y" or "n".')
+            time.sleep(0.25)
+            return check_github_for_updates()
+
+        logger.info(
+            f"The Fantasy Football Metrics Weekly Report app is {Fore.GREEN}up to date{Fore.WHITE} and running "
+            f"{Fore.GREEN}{last_local_version}{Fore.WHITE}."
+        )
+        project_repo.remote(name="origin").set_url(origin_url)
+        return True
+    except Exception as exc:
+        logger.warning("Skipping GitHub update check: %s", exc)
+        try:
             project_repo.remote(name="origin").set_url(origin_url)
-            return True
+        except Exception:
+            pass
+        return False
 
 
 def update_app(repository: Repo):

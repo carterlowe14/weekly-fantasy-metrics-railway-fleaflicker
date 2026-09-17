@@ -39,6 +39,17 @@ from resources.documentation import descriptions
 
 logger = get_logger(__name__, propagate=False)
 
+
+def _ensure_report_image(path: Path) -> Path:
+    if path.is_file():
+        return path
+
+    logger.warning("Report image missing at %s; generating a placeholder.", path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    placeholder = Image.new("RGB", (64, 64), (200, 200, 200))
+    placeholder.save(path, format="PNG")
+    return path
+
 # suppress verbose PIL debug logging
 logging.getLogger("PIL.PngImagePlugin").setLevel(level=logging.INFO)
 
@@ -74,6 +85,7 @@ def get_player_image(
                             f"headshot{f' for player {player_name}' if player_name else ''} at url {url}"
                         )
                         local_img_path = Path("resources") / "images" / "photo-not-available.png"
+                        local_img_path = _ensure_report_image(local_img_path)
                 else:
                     logger.error(
                         f"FILE {local_img_jpg_path} DOES NOT EXIST. CANNOT LOAD DATA LOCALLY WITHOUT HAVING PREVIOUSLY "
@@ -98,7 +110,7 @@ def get_player_image(
     else:
         logger.error(f"No available URL for player{f' {player_name}' if player_name else ''}.")
         img_name = "photo-not-available.png"
-        local_img_path = Path("resources") / "images" / img_name
+        local_img_path = _ensure_report_image(Path("resources") / "images" / img_name)
 
     img_reader = ImageReader(local_img_path)
     iw, ih = img_reader.getSize()
@@ -393,10 +405,21 @@ class PdfGenerator(object):
             self.font_bold_italic = "Helvetica-BoldOblique"
 
         if use_custom_font:
-            pdfmetrics.registerFont(TTFont(self.font, "resources/fonts/" + self.font + ".ttf"))
-            pdfmetrics.registerFont(TTFont(self.font_bold, "resources/fonts/" + self.font + ".ttf"))
-            pdfmetrics.registerFont(TTFont(self.font_italic, "resources/fonts/" + self.font + ".ttf"))
-            pdfmetrics.registerFont(TTFont(self.font_bold_italic, "resources/fonts/" + self.font + ".ttf"))
+            try:
+                pdfmetrics.registerFont(TTFont(self.font, "resources/fonts/" + self.font + ".ttf"))
+                pdfmetrics.registerFont(TTFont(self.font_bold, "resources/fonts/" + self.font_bold + ".ttf"))
+                pdfmetrics.registerFont(TTFont(self.font_italic, "resources/fonts/" + self.font_italic + ".ttf"))
+                pdfmetrics.registerFont(
+                    TTFont(self.font_bold_italic, "resources/fonts/" + self.font_bold_italic + ".ttf")
+                )
+            except Exception:
+                logger.warning(
+                    "Custom report fonts are missing from resources/fonts. Falling back to Helvetica."
+                )
+                self.font = "Helvetica"
+                self.font_bold = "Helvetica-Bold"
+                self.font_italic = "Helvetica-Oblique"
+                self.font_bold_italic = "Helvetica-BoldOblique"
 
         styles._baseFontName = self.font
         self.stylesheet = styles.getSampleStyleSheet()
@@ -1298,14 +1321,15 @@ class PdfGenerator(object):
 
     @staticmethod
     def get_img(path: Path | str, width: float = 1.0 * inch, hyperlink: str = None) -> ReportLabImage:
-        img = ImageReader(path)
+        image_path = _ensure_report_image(Path(path))
+        img = ImageReader(image_path)
         iw, ih = img.getSize()
         aspect = ih / float(iw)
 
         if hyperlink:
-            image = HyperlinkedImage(path, hyperlink=hyperlink, width=width, height=(width * aspect))
+            image = HyperlinkedImage(image_path, hyperlink=hyperlink, width=width, height=(width * aspect))
         else:
-            image = ReportLabImage(path, width=width, height=(width * aspect))
+            image = ReportLabImage(image_path, width=width, height=(width * aspect))
 
         return image
 

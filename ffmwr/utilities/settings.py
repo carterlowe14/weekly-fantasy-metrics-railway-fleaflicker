@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Type
 
 from camel_converter import to_snake
 from colorama import Fore, Style
-from dotenv import dotenv_values
+from dotenv import dotenv_values, load_dotenv
 from pydantic import Field
 # noinspection PyProtectedMember
 from pydantic.fields import FieldInfo
@@ -122,9 +122,9 @@ class CustomSettings(BaseSettings, FFMWRPythonObjectJson):
 
     @staticmethod
     def convert_field_value_to_env(field_value: Any) -> str:
-        if isinstance(field_value, int):
+        if isinstance(field_value, bool):
             env_field_value = str(field_value)
-        elif isinstance(field_value, bool):
+        elif isinstance(field_value, int):
             env_field_value = str(field_value)
         elif isinstance(field_value, list):
             env_field_value = ",".join([val for val in field_value])
@@ -422,9 +422,9 @@ class AppSettings(CustomSettings):
     )
 
     # TODO: check if https://github.com/koxudaxi/pydantic-pycharm-plugin/issues/1020 is resolved and remove #noqa
-    platform_settings: PlatformSettings = PlatformSettings()  # noqa
-    report_settings: ReportSettings = ReportSettings()  # noqa
-    integration_settings: IntegrationSettings = IntegrationSettings()  # noqa
+    platform_settings: PlatformSettings = Field(default_factory=PlatformSettings)  # noqa
+    report_settings: ReportSettings = Field(default_factory=ReportSettings)  # noqa
+    integration_settings: IntegrationSettings = Field(default_factory=IntegrationSettings)  # noqa
 
 
 def get_app_settings_from_env_file(env_file_path: Path) -> AppSettings:
@@ -445,6 +445,8 @@ def get_app_settings_from_env_file(env_file_path: Path) -> AppSettings:
                 )
             else:
                 logger.debug('All recommended local ".env" file variables present.')
+
+            load_dotenv(env_file_path, override=False)
 
             logger.debug('The ".env" file is available. Running Fantasy Football Metrics Weekly Report app...')
 

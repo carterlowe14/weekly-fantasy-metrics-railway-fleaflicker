@@ -4,7 +4,6 @@ __email__ = "uberfastman@uberfastman.dev"
 import json
 import logging
 import os
-import sys
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -99,14 +98,15 @@ class BasePlatform(ABC):
 
     def query(self, url: str, headers: Dict[str, str] = None):
         logger.debug(f"Retrieving {self.platform_display} web data from endpoint: {url}")
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=30)
 
         try:
             response.raise_for_status()
         except HTTPError as e:
-            # log error and terminate query if status code is not 200
             logger.error(f"REQUEST FAILED WITH STATUS CODE: {response.status_code} - {e}")
-            sys.exit(1)
+            raise RuntimeError(
+                f"{self.platform_display} request failed with HTTP {response.status_code} for {url}"
+            ) from e
 
         response_json = response.json()
         logger.debug(f"Response (JSON): {response_json}")
