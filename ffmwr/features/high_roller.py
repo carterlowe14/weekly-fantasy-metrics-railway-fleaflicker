@@ -16,6 +16,20 @@ from ffmwr.utilities.utils import generate_normalized_player_key
 
 logger = get_logger(__name__, propagate=False)
 
+def _get_position_from_NFL(self, player_name: str, player_team: str) -> str:
+    """Fallback to NFL.com player data when Spotrac position parse fails."""
+    try:
+        url = f"https://www.nfl.com/api/v1/players?search={player_name.replace(' ', '%20')}"
+        resp = requests.get(url, timeout=5)
+        data = resp.json()
+        if data and len(data) > 0:
+            position = data[0].get("position", None)
+            logger.debug(f"NFL.com fallback returned position '{position}' for {player_name}")
+            return position
+    except Exception as e:
+        logger.debug(f"NFL.com fallback failed for {player_name}: {repr(e)}")
+    return None
+
 
 class HighRollerFeature(BaseFeature):
     def __init__(
@@ -125,8 +139,12 @@ class HighRollerFeature(BaseFeature):
             player_position = pos_elem.getText().strip() if pos_elem else "Unknown"
 
             if player_position not in self.position_types:
-                logger.warning(f"Unknown position '{player_position}' for player {player_full_name}. Skipping.")
-                continue
+                fallback_pos = self._get_position_from_NFL(player_full_name, player_team_abbr)
+                if fallback_pos and fallback_pos in self.position_types:
+                    player_position = fallback_pos
+                else:
+                    logger.warning(f"Unknown position '{player_position}' for player {player_full_name}. Skipping.")
+                    continue
 
             player_position_type = self.position_types[player_position]
 
