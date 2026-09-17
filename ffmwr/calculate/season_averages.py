@@ -138,3 +138,23 @@ class SeasonAverageCalculator(object):
                         ordered_team.insert(-1 if len(ordered_team) > 4 else len(ordered_team), value)
                     elif key == "data_for_coaching_efficiency" and self.break_ties and first_ties:
                         ordered_team.insert(-2 if len(ordered_team) > 4 else len(ordered_team), value)
+                    else:
+                        ordered_team.append(value)
+
+                    ordered_season_average_list.append(ordered_team)
+                    matched = True
+                    break
+
+            if not matched and ordered_team:
+                # Keep the row even if we couldn't attach an average
+                ordered_season_average_list.append(ordered_team)
+
+        if not ordered_season_average_list and current_rows:
+            logger.warning(
+                'Season average merge produced no rows for "%s". '
+                "Falling back to current-week data without averages.",
+                key,
+            )
+            return current_rows
+
+        return ordered_season_average_list
