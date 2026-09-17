@@ -59,6 +59,7 @@ class DiscordIntegration(BaseIntegration):
         self.client = DiscordWebhook(
             url=self.webhook_url,
             allowed_mentions=allowed_mentions,
+            wait=True,
         )
 
     def post_message(self, message: str) -> Dict:
@@ -70,7 +71,7 @@ class DiscordIntegration(BaseIntegration):
 
         self.client.set_content(message)
 
-        return _discord_response_payload(self.client.execute(wait=True))
+        return _discord_response_payload(self.client.execute())
 
     def upload_file(self, file_path: Path) -> Dict:
         logger.debug(f"Uploading file to Discord: \n{file_path}")
