@@ -1,5 +1,6 @@
 import logging
 import logging.handlers as handlers
+import os
 import re
 import sys
 import time
@@ -133,7 +134,15 @@ def get_logger(
 
     log_file = log_dir / "out.log"
 
-    log_level = logging.INFO
+    log_level_mapping = {
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+        "warning": logging.WARNING,
+        "error": logging.ERROR,
+        "critical": logging.CRITICAL,
+    }
+
+    log_level = log_level_mapping.get(os.environ.get("LOG_LEVEL", "info") or "info")
 
     separator = f"{Fore.WHITE} - {Style.RESET_ALL}"
     log_formatter = StyledFormatter(
