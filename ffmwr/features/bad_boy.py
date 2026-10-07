@@ -96,16 +96,46 @@ class BadBoyFeature(BaseFeature):
     def _get_ajax_nonce(self):
         logger.debug(f"Retrieving AJAX nonce for {self.feature_type_title} feature.")
 
-        res = requests.get(self.feature_web_base_url)
+        res = requests.get(
+            self.feature_web_base_url,
+            headers={
+                "User-Agent": (
+                    "FantasyFootballMetricsWeeklyReport/1.0 "
+                    "(BadBoy feature; +https://github.com/carterlowe14/weekly-fantasy-metrics-railway-fleaflicker)"
+                )
+            },
+            timeout=30,
+        )
+        res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
-        cdata = re.search("var sitedata = (.*);", soup.find(string=re.compile("CDATA"))).group(1)
-        return json.loads(cdata)["ajax_nonce"]
+
+        cdata_node = soup.find(string=re.compile("CDATA"))
+        if not cdata_node:
+            raise RuntimeError(
+                f"USA Today arrests page did not contain expected CDATA/sitedata "
+                f"(status={res.status_code}, len={len(res.text)}). "
+                f"Likely a bot challenge or layout change."
+            )
+
+        match = re.search(r"var sitedata = (.*);", str(cdata_node))
+        if not match:
+            raise RuntimeError("USA Today arrests page CDATA did not contain sitedata JSON.")
+
+        return json.loads(match.group(1))["ajax_nonce"]
 
     # noinspection DuplicatedCode
     def _get_feature_data(self) -> None:
         logger.debug("Retrieving bad boy feature data from the web.")
 
-        ajax_nonce = self._get_ajax_nonce()
+        try:
+            ajax_nonce = self._get_ajax_nonce()
+        except Exception as exc:
+            logger.error(
+                f"Bad Boy feature failed soft (skipping section): could not get AJAX nonce: {exc}"
+            )
+            self.feature_data = {}
+            self.raw_feature_data = {}
+            return
 
         usa_today_nfl_arrest_url = "https://databases.usatoday.com/wp-admin/admin-ajax.php"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
