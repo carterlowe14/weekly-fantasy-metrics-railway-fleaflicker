@@ -3,6 +3,7 @@ __email__ = "uberfastman@uberfastman.dev"
 
 import itertools
 import json
+import os
 import re
 from collections import OrderedDict
 from pathlib import Path
@@ -96,201 +97,254 @@ class BadBoyFeature(BaseFeature):
     def _get_ajax_nonce(self):
         logger.debug(f"Retrieving AJAX nonce for {self.feature_type_title} feature.")
 
-        res = requests.get(self.feature_web_base_url)
+        contact = os.getenv("CONTACT_EMAIL", "set-CONTACT_EMAIL@example.com")
+        res = requests.get(
+            self.feature_web_base_url,
+            headers={
+                "User-Agent": (
+                    "FantasyFootballMetricsWeeklyReport/1.0 "
+                    f"(BadBoy feature; contact: {contact}; "
+                    "+https://github.com/carterlowe14/weekly-fantasy-metrics-railway-fleaflicker)"
+                )
+            },
+            timeout=30,
+        )
+        res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
-        cdata = re.search("var sitedata = (.*);", soup.find(string=re.compile("CDATA"))).group(1)
-        return json.loads(cdata)["ajax_nonce"]
+
+        cdata_node = soup.find(string=re.compile("CDATA"))
+        if not cdata_node:
+            raise RuntimeError(
+                f"USA Today arrests page did not contain expected CDATA/sitedata "
+                f"(status={res.status_code}, len={len(res.text)}). "
+                f"Likely a bot challenge or layout change."
+            )
+
+        match = re.search(r"var sitedata = (.*);", str(cdata_node))
+        if not match:
+            raise RuntimeError("USA Today arrests page CDATA did not contain sitedata JSON.")
+
+        return json.loads(match.group(1))["ajax_nonce"]
 
     # noinspection DuplicatedCode
     def _get_feature_data(self) -> None:
         logger.debug("Retrieving bad boy feature data from the web.")
 
-        ajax_nonce = self._get_ajax_nonce()
+        try:
+            ajax_nonce = self._get_ajax_nonce()
+        except Exception as exc:
+            logger.error(
+                f"Bad Boy feature failed soft (skipping section): could not get AJAX nonce: {exc}"
+            )
+            self.feature_data = {}
+            self.raw_feature_data = {}
+            return
 
-        usa_today_nfl_arrest_url = "https://databases.usatoday.com/wp-admin/admin-ajax.php"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        try:
+            usa_today_nfl_arrest_url = "https://databases.usatoday.com/wp-admin/admin-ajax.php"
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-        """
-        Example ajax query body:
+            """
+            Example ajax query body:
         
-        example_body = (
-            'action=cspFetchTable&'
-            'security=61406e4feb&'
-            'pageID=10&'
-            'sortBy=Date&'
-            'sortOrder=desc&'
-            'searches={"Last_name":"hill","Team":"SEA","First_name":"leroy"}'
-        )
-        """
-        arrests = []
-        for ndx, team in enumerate(nfl_team_abbreviations):
-            # the usatoday arrests data uses JAC to abbreviate Jacksonville Jaguars
-            if team == "JAX":
-                team = "JAC"
+            example_body = (
+                'action=cspFetchTable&'
+                'security=61406e4feb&'
+                'pageID=10&'
+                'sortBy=Date&'
+                'sortOrder=desc&'
+                'searches={"Last_name":"hill","Team":"SEA","First_name":"leroy"}'
+            )
+            """
+            arrests = []
+            for ndx, team in enumerate(nfl_team_abbreviations):
+                # the usatoday arrests data uses JAC to abbreviate Jacksonville Jaguars
+                if team == "JAX":
+                    team = "JAC"
 
-            logger.debug(f"Retrieving bad boy feature data for NFL team: {team}.")
+                logger.debug(f"Retrieving bad boy feature data for NFL team: {team}.")
 
-            try:
-                page_num = 1
-                body = (
-                    f"action=cspFetchTable"
-                    f"&security={ajax_nonce}"
-                    f"&pageID=10"
-                    f"&sortBy=Date"
-                    f"&sortOrder=desc"
-                    f"&page={page_num}"
-                    f'&searches={{"Team":"{team}"}}'
-                )
-
-                res_json = requests.post(usa_today_nfl_arrest_url, data=body, headers=headers).json()
-
-                arrests_data = res_json["data"]["Result"]
-
-                for arrest in arrests_data:
-                    arrests.append(
-                        {
-                            "full_name": f"{arrest['First_name']} {arrest['Last_name']}",
-                            "team_abbr": (
-                                "FA"
-                                if (arrest["Team"] == "Free agent" or arrest["Team"] == "Free Agent")
-                                else arrest["Team"]
-                            ),
-                            "date": arrest["Date"],
-                            "position": arrest["Position"],
-                            "position_type": self.position_types[arrest["Position"]],
-                            "case": arrest["Case_1"].upper(),
-                            "crime": arrest["Category"].upper(),
-                            "description": arrest["Description"],
-                            "outcome": arrest["Outcome"],
-                        }
+                try:
+                    page_num = 1
+                    body = (
+                        f"action=cspFetchTable"
+                        f"&security={ajax_nonce}"
+                        f"&pageID=10"
+                        f"&sortBy=Date"
+                        f"&sortOrder=desc"
+                        f"&page={page_num}"
+                        f'&searches={{"Team":"{team}"}}'
                     )
 
-                total_results = res_json["data"]["totalResults"]
+                    res = requests.post(usa_today_nfl_arrest_url, data=body, headers=headers, timeout=30)
+                    res.raise_for_status()
+                    res_json = res.json()
 
-                # the USA Today NFL arrests database only retrieves 20 entries per request
-                if total_results > 20:
-                    # add extra page to include last page of results if they exist
-                    num_pages = (total_results // 20) + (1 if total_results % 20 > 0 else 0)
+                    arrests_data = (res_json.get("data") or {}).get("Result") or []
 
-                    for page in range(2, num_pages + 1):
-                        page_num += 1
-                        body = (
-                            f"action=cspFetchTable"
-                            f"&security={ajax_nonce}"
-                            f"&pageID=10"
-                            f"&sortBy=Date"
-                            f"&sortOrder=desc"
-                            f"&page={page_num}"
-                            f'&searches={{"Team":"{team}"}}'
+                    for arrest in arrests_data:
+                        arrests.append(
+                            {
+                                "full_name": f"{arrest['First_name']} {arrest['Last_name']}",
+                                "team_abbr": (
+                                    "FA"
+                                    if (arrest["Team"] == "Free agent" or arrest["Team"] == "Free Agent")
+                                    else arrest["Team"]
+                                ),
+                                "date": arrest["Date"],
+                                "position": arrest["Position"],
+                                "position_type": self.position_types[arrest["Position"]],
+                                "case": arrest["Case_1"].upper(),
+                                "crime": arrest["Category"].upper(),
+                                "description": arrest["Description"],
+                                "outcome": arrest["Outcome"],
+                            }
                         )
 
-                        r = requests.post(usa_today_nfl_arrest_url, data=body, headers=headers)
-                        resp_json = r.json()
+                    total_results = res_json["data"]["totalResults"]
 
-                        arrests_data = resp_json["data"]["Result"]
+                    # the USA Today NFL arrests database only retrieves 20 entries per request
+                    if total_results > 20:
+                        # add extra page to include last page of results if they exist
+                        num_pages = (total_results // 20) + (1 if total_results % 20 > 0 else 0)
 
-                        for arrest in arrests_data:
-                            arrests.append(
-                                {
-                                    "full_name": f"{arrest['First_name']} {arrest['Last_name']}",
-                                    "team_abbr": (
-                                        "FA"
-                                        if (arrest["Team"] == "Free agent" or arrest["Team"] == "Free Agent")
-                                        else arrest["Team"]
-                                    ),
-                                    "date": arrest["Date"],
-                                    "position": arrest["Position"],
-                                    "position_type": self.position_types[arrest["Position"]],
-                                    "case": arrest["Case_1"].upper(),
-                                    "crime": arrest["Category"].upper(),
-                                    "description": arrest["Description"],
-                                    "outcome": arrest["Outcome"],
-                                }
+                        for page in range(2, num_pages + 1):
+                            page_num += 1
+                            body = (
+                                f"action=cspFetchTable"
+                                f"&security={ajax_nonce}"
+                                f"&pageID=10"
+                                f"&sortBy=Date"
+                                f"&sortOrder=desc"
+                                f"&page={page_num}"
+                                f'&searches={{"Team":"{team}"}}'
                             )
 
-            except ConnectTimeout as e:
-                logger.debug(f"Connection timed out for {self.feature_type_title} feature: {e}")
-                logger.debug(f"Refreshing AJAX nonce and trying again for NFL team {team}.")
-                # refresh the AJAX nonce
-                ajax_nonce = self._get_ajax_nonce()
-                # insert the team for which the AJAX queries timed out back into the list before the next loop
-                nfl_team_abbreviations.insert(ndx + 1, team)
+                            r = requests.post(usa_today_nfl_arrest_url, data=body, headers=headers, timeout=30)
+                            r.raise_for_status()
+                            resp_json = r.json()
 
-        arrests_by_team = {
-            key: list(group)
-            for key, group in itertools.groupby(sorted(arrests, key=lambda x: x["team_abbr"]), lambda x: x["team_abbr"])
-        }
+                            arrests_data = (resp_json.get("data") or {}).get("Result") or []
 
-        for team_abbr in nfl_team_abbreviations:
-            if team_arrests := arrests_by_team.get(team_abbr):
-                nfl_team: Dict = {
-                    "position": "D/ST",
-                    "players": {},
-                    "offenders": [],
-                    "offenders_count": 0,
-                    "worst_offense": None,
-                    "worst_offense_points": 0,
-                    "bad_boy_points_total": 0,
-                }
+                            for arrest in arrests_data:
+                                arrests.append(
+                                    {
+                                        "full_name": f"{arrest['First_name']} {arrest['Last_name']}",
+                                        "team_abbr": (
+                                            "FA"
+                                            if (arrest["Team"] == "Free agent" or arrest["Team"] == "Free Agent")
+                                            else arrest["Team"]
+                                        ),
+                                        "date": arrest["Date"],
+                                        "position": arrest["Position"],
+                                        "position_type": self.position_types[arrest["Position"]],
+                                        "case": arrest["Case_1"].upper(),
+                                        "crime": arrest["Category"].upper(),
+                                        "description": arrest["Description"],
+                                        "outcome": arrest["Outcome"],
+                                    }
+                                )
 
-                for player_arrest in team_arrests:
-                    player_full_name = player_arrest.get("full_name")
-                    player_position = player_arrest.get("position")
-                    player_position_type = player_arrest.get("position_type")
-                    offense_category = str.upper(player_arrest.get("crime"))
-
-                    normalized_player_key = generate_normalized_player_key(player_full_name, team_abbr)
-
-                    # Add each crime to output categories for generation of crime_categories.new.json file, which can
-                    # be used to replace the existing crime_categories.json file. Each new crime categories will default
-                    # to a score of 0, and must have its score manually assigned within the json file.
-                    self.unique_crime_categories_for_output[offense_category] = self.crime_rankings.get(
-                        offense_category, 0
+                except ConnectTimeout as e:
+                    logger.debug(f"Connection timed out for {self.feature_type_title} feature: {e}")
+                    logger.debug(f"Refreshing AJAX nonce and trying again for NFL team {team}.")
+                    try:
+                        ajax_nonce = self._get_ajax_nonce()
+                    except Exception as nonce_exc:
+                        logger.error(
+                            f"Bad Boy feature failed soft (skipping remaining teams): "
+                            f"nonce refresh after timeout failed: {nonce_exc}"
+                        )
+                        break
+                    nfl_team_abbreviations.insert(ndx + 1, team)
+                except Exception as e:
+                    logger.error(
+                        f"Bad Boy feature failed soft for NFL team {team}: {e}. Continuing with other teams."
                     )
+                    continue
 
-                    # add raw player data json to raw_player_data for reference
-                    self.raw_feature_data[normalized_player_key] = player_arrest
+            arrests_by_team = {
+                key: list(group)
+                for key, group in itertools.groupby(sorted(arrests, key=lambda x: x["team_abbr"]), lambda x: x["team_abbr"])
+            }
 
-                    if offense_category in self.crime_rankings.keys():
-                        offense_points = self.crime_rankings.get(offense_category)
-                    else:
-                        offense_points = 0
-                        logger.warning(f'Crime ranking not found: "{offense_category}". Assigning score of 0.')
-
-                    nfl_player = {
-                        **self._get_feature_data_template(
-                            player_full_name, team_abbr, player_position, self.position_types[player_position]
-                        ),
-                        "offenses": [],
+            for team_abbr in nfl_team_abbreviations:
+                if team_arrests := arrests_by_team.get(team_abbr):
+                    nfl_team: Dict = {
+                        "position": "D/ST",
+                        "players": {},
+                        "offenders": [],
+                        "offenders_count": 0,
                         "worst_offense": None,
                         "worst_offense_points": 0,
                         "bad_boy_points_total": 0,
                     }
 
-                    # update player entry
-                    nfl_player["offenses"].append({offense_category: offense_points})
-                    nfl_player["bad_boy_points_total"] += offense_points
+                    for player_arrest in team_arrests:
+                        player_full_name = player_arrest.get("full_name")
+                        player_position = player_arrest.get("position")
+                        player_position_type = player_arrest.get("position_type")
+                        offense_category = str.upper(player_arrest.get("crime"))
 
-                    if offense_points > nfl_player["worst_offense_points"]:
-                        # noinspection PyTypeChecker
-                        nfl_player["worst_offense"] = offense_category
-                        nfl_player["worst_offense_points"] = offense_points
+                        normalized_player_key = generate_normalized_player_key(player_full_name, team_abbr)
 
-                    self.feature_data[normalized_player_key] = nfl_player
+                        # Add each crime to output categories for generation of crime_categories.new.json file, which can
+                        # be used to replace the existing crime_categories.json file. Each new crime categories will default
+                        # to a score of 0, and must have its score manually assigned within the json file.
+                        self.unique_crime_categories_for_output[offense_category] = self.crime_rankings.get(
+                            offense_category, 0
+                        )
 
-                    # update team DEF entry
-                    if player_position_type == "D":
-                        nfl_team["players"][normalized_player_key] = self.feature_data[normalized_player_key]
-                        nfl_team["bad_boy_points_total"] += offense_points
-                        nfl_team["offenders"].append(player_full_name)
-                        nfl_team["offenders"] = list(set(nfl_team["offenders"]))
-                        nfl_team["offenders_count"] = len(nfl_team["offenders"])
+                        # add raw player data json to raw_player_data for reference
+                        self.raw_feature_data[normalized_player_key] = player_arrest
 
-                        if offense_points > nfl_team["worst_offense_points"]:
-                            nfl_team["worst_offense"] = offense_category
-                            nfl_team["worst_offense_points"] = offense_points
+                        if offense_category in self.crime_rankings.keys():
+                            offense_points = self.crime_rankings.get(offense_category)
+                        else:
+                            offense_points = 0
+                            logger.warning(f'Crime ranking not found: "{offense_category}". Assigning score of 0.')
 
-                self.feature_data[team_abbr] = nfl_team
+                        nfl_player = {
+                            **self._get_feature_data_template(
+                                player_full_name, team_abbr, player_position, self.position_types[player_position]
+                            ),
+                            "offenses": [],
+                            "worst_offense": None,
+                            "worst_offense_points": 0,
+                            "bad_boy_points_total": 0,
+                        }
+
+                        # update player entry
+                        nfl_player["offenses"].append({offense_category: offense_points})
+                        nfl_player["bad_boy_points_total"] += offense_points
+
+                        if offense_points > nfl_player["worst_offense_points"]:
+                            # noinspection PyTypeChecker
+                            nfl_player["worst_offense"] = offense_category
+                            nfl_player["worst_offense_points"] = offense_points
+
+                        self.feature_data[normalized_player_key] = nfl_player
+
+                        # update team DEF entry
+                        if player_position_type == "D":
+                            nfl_team["players"][normalized_player_key] = self.feature_data[normalized_player_key]
+                            nfl_team["bad_boy_points_total"] += offense_points
+                            nfl_team["offenders"].append(player_full_name)
+                            nfl_team["offenders"] = list(set(nfl_team["offenders"]))
+                            nfl_team["offenders_count"] = len(nfl_team["offenders"])
+
+                            if offense_points > nfl_team["worst_offense_points"]:
+                                nfl_team["worst_offense"] = offense_category
+                                nfl_team["worst_offense_points"] = offense_points
+
+                    self.feature_data[team_abbr] = nfl_team
+        except Exception as exc:
+            logger.error(
+                f"Bad Boy feature failed soft (skipping entire section): {exc}"
+            )
+            self.feature_data = {}
+            self.raw_feature_data = {}
+            return
 
     def get_player_bad_boy_crime(
         self, player_first_name: str, player_last_name: str, player_team_abbr: str, player_position: str

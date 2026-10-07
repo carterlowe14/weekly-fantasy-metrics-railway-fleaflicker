@@ -4,6 +4,7 @@ __email__ = "uberfastman@uberfastman.dev"
 import os
 import secrets
 import sys
+import threading
 import warnings
 from argparse import ArgumentParser, HelpFormatter, Namespace
 from datetime import datetime
@@ -36,6 +37,7 @@ logger = get_logger()
 app = FastAPI(title="Fantasy Football Metrics Weekly Report Trigger")
 
 TRIGGER_SECRET = os.getenv("TRIGGER_SECRET")
+REPORT_LOCK = threading.Lock()
 if not TRIGGER_SECRET:
     logger.warning(
         'TRIGGER_SECRET is not set. The "/trigger" endpoint is UNAUTHENTICATED '
@@ -82,28 +84,42 @@ def trigger_report(
     """
     Always runs with the .env defaults — no per-request configuration accepted.
     Returns the generated PDF and schedules it for deletion after the response.
-    """
-    root_directory = Path(__file__).parent
-    app_settings = get_app_settings_from_env_file(root_directory / ".env")
 
-    args = build_default_args(app_settings)
-    args.skip_uploads = False  # force uploads when triggered via HTTP
+    Concurrent calls while a report is already running get 409 so external
+    callers (CarlBot/Make) cannot stack duplicate Fleaflicker scrapes.
+    """
+    if not REPORT_LOCK.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="A report is already running. Do not retry until it finishes.",
+        )
 
     try:
-        report_pdf = run_report(args, app_settings, root_directory)
-    except RuntimeError as exc:
-        logger.error("Report generation failed: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        logger.exception("Unexpected error during report generation")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {exc}") from exc
+        root_directory = Path(__file__).parent
+        app_settings = get_app_settings_from_env_file(root_directory / ".env")
 
-    background_tasks.add_task(remove_file, report_pdf)
-    return FileResponse(
-        path=report_pdf,
-        media_type="application/pdf",
-        filename=report_pdf.name,
-    )
+        args = build_default_args(app_settings)
+        args.skip_uploads = False  # force uploads when triggered via HTTP
+
+        try:
+            report_pdf = run_report(args, app_settings, root_directory)
+        except RuntimeError as exc:
+            logger.error("Report generation failed: %s", exc)
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Unexpected error during report generation")
+            raise HTTPException(status_code=500, detail=f"Unexpected error: {exc}") from exc
+
+        background_tasks.add_task(remove_file, report_pdf)
+        return FileResponse(
+            path=report_pdf,
+            media_type="application/pdf",
+            filename=report_pdf.name,
+        )
+    finally:
+        REPORT_LOCK.release()
 
 
 # ---------------------------------------------------------------------------
@@ -322,14 +338,7 @@ def _is_successful_response(platform: str, response) -> bool:
             return response.get("meta", {}).get("code") in (201, 202)
         return False
     if platform == "discord":
-        if not isinstance(response, dict):
-            return False
-        if response.get("ok") is True:
-            return True
-        status_code = response.get("status_code")
-        if isinstance(status_code, int) and status_code < 400:
-            return True
-        return "id" in response or response.get("type") == 0
+        return isinstance(response, dict) and response.get("type") == 0
     return False
 
 
@@ -424,18 +433,11 @@ def select_platform(settings: AppSettings, use_default: bool = False) -> str:
     raise RuntimeError("Invalid platform selection. Please answer 'y' or 'n'.")
 
 
-def select_week(settings: AppSettings, use_default: bool = False) -> Optional[int]:
-    if settings.week_for_report not in (None, "default"):
-        try:
-            week = int(settings.week_for_report)
-            logger.info("Using configured week for report: %s", week)
-            return week
-        except (TypeError, ValueError):
-            logger.warning("Invalid WEEK_FOR_REPORT=%s; falling back to last completed week.", settings.week_for_report)
-
+def select_week(settings: AppSettings, use_default: bool = False) -> int:
+    fallback = settings.current_nfl_week or 1
     if use_default:
-        logger.info("Using last completed NFL week (WEEK_FOR_REPORT=default).")
-    return None
+        logger.info("Using default NFL week: %s", fallback)
+    return fallback
 
 
 def _prompt_for_league_id() -> str:
@@ -463,17 +465,14 @@ def _prompt_for_league_id() -> str:
 # Server & CLI
 # ---------------------------------------------------------------------------
 def serve_trigger_server(app_settings: AppSettings) -> None:
-    # Prefer the PORT that Railway (or any PaaS) injects.
-    # Fall back to 8080 only for local development.
-    host: str = os.getenv("HOST", "0.0.0.0")
-    port: int = int(os.getenv("PORT", "8080"))
+    # Always bind all interfaces. Railway injects PORT; default 8080 locally.
+    port: int = int(os.environ.get("PORT", "8080"))
 
-    logger.info("Starting Fantasy Football Metrics trigger server on %s:%s", host, port)
-    logger.info("Environment → HOST=%s  PORT=%s", host, port)
+    logger.info("Starting Fantasy Football Metrics trigger server on 0.0.0.0:%s", port)
 
     uvicorn.run(
         app,
-        host=host,
+        host="0.0.0.0",
         port=port,
         log_level="info",
         access_log=True,
