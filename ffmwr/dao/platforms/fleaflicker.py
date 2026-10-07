@@ -2,6 +2,7 @@ __author__ = "Wren J. R. (uberfastman)"
 __email__ = "uberfastman@uberfastman.dev"
 
 import datetime
+import os
 import time
 import logging
 import re
@@ -24,10 +25,12 @@ logger = get_logger(__name__, propagate=False)
 logger.setLevel(level=logging.INFO)
 
 # Identify this app to Fleaflicker (and avoid the anonymous python-requests UA).
-# Update the contact email if you want them to reach you for allowlisting.
+# Set CONTACT_EMAIL in Railway Variables (or .env) so they can reach you for allowlisting.
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "set-CONTACT_EMAIL@example.com")
 FLEAFLICKER_USER_AGENT = (
     "FantasyFootballMetricsWeeklyReport/1.0 "
-    "(league 180182; contact: uberfastman@uberfastman.dev; +https://github.com/carterlowe14/weekly-fantasy-metrics-railway-fleaflicker)"
+    f"(league 180182; contact: {CONTACT_EMAIL}; "
+    "+https://github.com/carterlowe14/weekly-fantasy-metrics-railway-fleaflicker)"
 )
 FLEAFLICKER_HEADERS = {"User-Agent": FLEAFLICKER_USER_AGENT, "Accept": "application/json, text/html, */*"}
 
