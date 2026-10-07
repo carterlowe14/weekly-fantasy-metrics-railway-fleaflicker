@@ -223,8 +223,7 @@
       ]
     },
     "TAXI": {
-      "type": "any",
-      "is_flex": false
+      "base": "BN"
     }
   },
   "espn": {

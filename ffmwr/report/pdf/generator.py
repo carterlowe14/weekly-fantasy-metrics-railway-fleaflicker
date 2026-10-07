@@ -999,7 +999,9 @@ class PdfGenerator(object):
             temp_data = []
             row: List[Any]
             for row in data:
-                entry = [row[0], row[1], row[2], f"${float(row[3]):,.0f}", row[4], f"${float(row[5]):,.0f}"]
+                worst_fine = float(row[5] or 0)
+                worst_fine_display = f"${worst_fine:,.0f}" if worst_fine > 0 else "N/A"
+                entry = [row[0], row[1], row[2], f"${float(row[3]):,.0f}", row[4], worst_fine_display]
                 temp_data.append(entry)
             data = temp_data
 
@@ -1426,7 +1428,7 @@ class PdfGenerator(object):
                     starting_players = []
                     player: BasePlayer
                     for player in player_info:
-                        if player.selected_position not in self.report_data.bench_positions:
+                        if (player.selected_position not in self.report_data.bench_positions and player.selected_position != "TAXI"):
                             if player.season_points and player.week_for_report > 1:
                                 player.season_average_points = round(
                                     (player.season_points - player.points) / (player.week_for_report - 1), 2
@@ -1706,12 +1708,13 @@ class PdfGenerator(object):
                     violating_players = sorted(violating_players, key=lambda x: x.high_roller_fines_total, reverse=True)
                     violating_players_data = []
                     for player in violating_players:
+                        worst_fine = float(player.high_roller_worst_violation_fine or 0)
                         violating_players_data.append(
                             [
                                 player.full_name,
                                 f"${player.high_roller_fines_total:,.0f}",
                                 player.high_roller_worst_violation,
-                                f"${player.high_roller_worst_violation_fine:,.0f}",
+                                f"${worst_fine:,.0f}" if worst_fine > 0 else "N/A",
                             ]
                         )
                     # if there are no violating players, skip table
