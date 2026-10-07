@@ -433,11 +433,11 @@ def select_platform(settings: AppSettings, use_default: bool = False) -> str:
     raise RuntimeError("Invalid platform selection. Please answer 'y' or 'n'.")
 
 
-def select_week(settings: AppSettings, use_default: bool = False) -> int:
-    fallback = settings.current_nfl_week or 1
+def select_week(settings: AppSettings, use_default: bool = False) -> int | str:
+    week_for_report = settings.week_for_report or "default"
     if use_default:
-        logger.info("Using default NFL week: %s", fallback)
-    return fallback
+        logger.info("Using configured report week: %s", week_for_report)
+    return week_for_report
 
 
 def _prompt_for_league_id() -> str:
