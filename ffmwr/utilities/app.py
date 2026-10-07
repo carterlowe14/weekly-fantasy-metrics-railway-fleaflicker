@@ -246,7 +246,11 @@ def platform_data_factory(
 
 
 def add_report_player_stats(
-    settings: AppSettings, metrics: Dict[str, Any], player: BasePlayer, bench_positions: List[str]
+    settings: AppSettings,
+    metrics: Dict[str, Any],
+    player: BasePlayer,
+    bench_positions: List[str],
+    include_high_roller: bool = True,
 ) -> BasePlayer:
     player.bad_boy_crime = str()
     player.bad_boy_points = int()
@@ -280,7 +284,7 @@ def add_report_player_stats(
                 player.first_name, player.last_name, player.nfl_team_abbr, player.primary_position
             )
 
-        if settings.report_settings.league_high_roller_rankings_bool:
+        if settings.report_settings.league_high_roller_rankings_bool and include_high_roller:
             high_roller_stats: HighRollerFeature = metrics.get("high_roller_stats")
             player.high_roller_worst_violation = high_roller_stats.get_player_worst_violation(
                 player.first_name, player.last_name, player.nfl_team_abbr, player.primary_position
@@ -312,7 +316,13 @@ def add_report_team_stats(
     bench_positions = league.bench_positions
 
     for player in team.roster:
-        add_report_player_stats(settings, metrics, player, bench_positions)
+        add_report_player_stats(
+            settings,
+            metrics,
+            player,
+            bench_positions,
+            include_high_roller=week_counter == league.week_for_report,
+        )
 
     starting_lineup_points = round(
         sum([p.points for p in team.roster if p.selected_position not in bench_positions]), 2
